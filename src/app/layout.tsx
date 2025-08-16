@@ -22,8 +22,14 @@ const rajdhani = Rajdhani({
 });
 
 export const metadata: Metadata = {
-  title: "TokoSaya - Top Up Game",
-  description: "Website top-up game terpercaya di Indonesia",
+  title: "Gimbox.id - Topup Game Murah Gercep",
+  description: "Topup game murah, cepat, dan terpercaya. Pilihan paket lengkap, pembayaran mudah, layanan gercep.",
+  icons: {
+    icon: "/images/favicon.png",
+    shortcut: "/images/favicon.png",
+    apple: "/images/favicon.png",
+  },
+  applicationName: "Gimbox.id - Topup Game Murah Gercep",
 };
 
 export default function RootLayout({
@@ -32,7 +38,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id">
+  <html lang="id">
     <body
         className={`${geistSans.variable} ${geistMono.variable} ${rajdhani.variable} antialiased`}
         style={{
@@ -43,6 +49,7 @@ export default function RootLayout({
       backgroundPosition: "center",
         }}
       >
+    <meta name="theme-color" content="#0d6efd" />
         <AuthProvider>
           {/* Header hidden on admin via HeaderGate */}
           <HeaderGate />
