@@ -108,7 +108,7 @@ export default function Header() {
                 if (q.trim().length > 0) setOpen(true);
               }}
               onKeyDown={onKeyDown}
-              placeholder="Pencarian..."
+              placeholder="Cari Game"
               className="w-full rounded-full border border-slate-300 bg-[#fefefe] text-slate-900 placeholder-slate-400 px-4 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-orange-400"
             />
             <svg
