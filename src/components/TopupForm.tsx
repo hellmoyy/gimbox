@@ -490,7 +490,7 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
       {/* Payment method selection */}
       {gateways.length > 0 && (
         <div className="rounded-lg border p-3">
-          <div className="text-sm font-medium text-slate-700 mb-1">Metode Pembayaran</div>
+          <div className="text-sm font-semibold text-slate-900 mb-1">Metode Pembayaran</div>
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap gap-3 text-sm">
               {gateways.map((g) => (
@@ -504,20 +504,20 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
                       setSelectedMethod(g.methods?.[0] || "");
                     }}
                   />
-                  <span className="capitalize">{g.name}</span>
+                  <span className="capitalize text-slate-900 font-medium">{g.name}</span>
                 </label>
               ))}
             </div>
             {gateways.find((g) => g.name === selectedGateway)?.methods?.length ? (
-              <div className="text-xs text-slate-600">
-                <div className="mb-1">Opsi:</div>
+              <div className="text-xs text-slate-700">
+                <div className="mb-1 font-medium text-slate-900">Opsi:</div>
                 <div className="flex flex-wrap gap-3">
                   {gateways
                     .find((g) => g.name === selectedGateway)!
                     .methods.map((m) => (
                       <label key={m} className="inline-flex items-center gap-2">
                         <input type="radio" name="method" checked={selectedMethod === m} onChange={() => setSelectedMethod(m)} />
-                        <span>{m}</span>
+                        <span className="text-slate-900 font-medium">{m}</span>
                       </label>
                     ))}
                 </div>
