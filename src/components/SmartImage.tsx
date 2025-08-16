@@ -7,7 +7,7 @@ export default function SmartImage({ src, alt, className, loading = "lazy" }: { 
     let s = (src || "").trim();
     // Normalize relative paths to start with '/'
     if (s && !/^https?:\/\//i.test(s) && !s.startsWith("/")) s = `/${s.replace(/^\.+\/?/, "")}`;
-    if (!s) return ["/images/logo-gimbox.png"]; // fallback to existing asset
+  if (!s) return ["/images/logo/logo-black.png"]; // fallback to existing asset
     if (/(\.jpg|jpeg|png|webp)$/i.test(s)) {
       const base = s.replace(/\.(jpg|jpeg|png|webp)$/i, "");
       return [s, base + ".png", base + ".jpg", base + ".jpeg", base + ".webp"];

@@ -9,13 +9,12 @@ export default async function TopupPage({ params }: { params: Promise<{ code: st
 
   return (
     <main>
-      <div className="max-w-md mx-auto px-4 pt-8 pb-28">
-        <h1 className="text-2xl font-bold mb-2 text-center text-slate-900">Topup {product.name}</h1>
+  <div className="max-w-md mx-auto px-4 pt-8 pb-28 mt-2">
         <div className="flex flex-col items-center mb-5">
           <img
-            src={product.icon || '/images/logo-gimbox.png'}
+            src={product.icon || '/images/logo/logo-black.png'}
             alt={product.name}
-            className="w-28 h-28 rounded-2xl object-cover object-center"
+            className="w-20 h-20 rounded-2xl object-cover object-center"
           />
           <div className="font-semibold text-lg mt-3 text-slate-900">{product.name}</div>
         </div>

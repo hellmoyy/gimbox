@@ -25,9 +25,9 @@ export const metadata: Metadata = {
   title: "Gimbox.id - Topup Game Murah Gercep",
   description: "Topup game murah, cepat, dan terpercaya. Pilihan paket lengkap, pembayaran mudah, layanan gercep.",
   icons: {
-    icon: "/images/favicon.png",
-    shortcut: "/images/favicon.png",
-    apple: "/images/favicon.png",
+    icon: "/images/logo/favicon.png",
+    shortcut: "/images/logo/favicon.png",
+    apple: "/images/logo/favicon.png",
   },
   applicationName: "Gimbox.id - Topup Game Murah Gercep",
 };

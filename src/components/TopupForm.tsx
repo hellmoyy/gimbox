@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 
 // Note: using any for unknown variant additions (region) to avoid breaking existing typing
@@ -30,6 +30,10 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   const [gateways, setGateways] = useState<Array<{ name: string; enabled: boolean; methods: string[] }>>([]);
   const [selectedGateway, setSelectedGateway] = useState<string>("midtrans");
   const [selectedMethod, setSelectedMethod] = useState<string>("");
+  const [showMethodModal, setShowMethodModal] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [methodFees, setMethodFees] = useState<Record<string, number>>({});
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   const activeVariantsAll = useMemo(() => (variants || []).filter(v => (v.isActive ?? true) !== false), [variants]);
   const activeVariants = useMemo(() => {
@@ -98,9 +102,71 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
           setSelectedGateway(enabledList[0].name);
           setSelectedMethod(enabledList[0].methods?.[0] || "");
         }
+        // Also fetch method fees
+        try {
+          const rf = await fetch('/api/gateways/fees', { cache: 'no-store' });
+          const jf = await rf.json();
+          if (jf?.success && jf?.fees && typeof jf.fees === 'object') setMethodFees(jf.fees);
+        } catch {}
       } catch {}
     })();
   }, []);
+
+  // Load wallet balance when method modal opens
+  useEffect(() => {
+    let ignore = false;
+    async function loadBalance() {
+      try {
+        const res = await fetch('/api/wallet/me', { cache: 'no-store' });
+        const j = await res.json();
+        if (!ignore) setWalletBalance(typeof j?.balance === 'number' ? j.balance : 0);
+      } catch {
+        if (!ignore) setWalletBalance(0);
+      }
+    }
+    if (showMethodModal && sessionEmail) loadBalance();
+    return () => { ignore = true; };
+  }, [showMethodModal, sessionEmail]);
+
+  function beginPayment() {
+    // If not logged in, show login prompt
+    if (!sessionEmail) {
+      setShowLogin(true);
+      return;
+    }
+    // Open method selection modal
+    setShowMethodModal(true);
+  }
+
+  function chooseMethodAndPay(kind: 'qris' | 'emoney' | 'va' | 'transfer') {
+    // Pick available gateway/method from config
+    const mid = gateways.find(g => g.name === 'midtrans' && g.enabled);
+    if (!mid) { setShowMethodModal(false); formRef.current?.requestSubmit(); return; }
+    const methods = Array.isArray(mid.methods) ? mid.methods : [];
+    let methodCode = '';
+    if (kind === 'qris' && methods.includes('qris')) methodCode = 'qris';
+    else if (kind === 'emoney') {
+      // Prefer GoPay, fallback to ShopeePay
+      if (methods.includes('gopay')) methodCode = 'gopay';
+      else if (methods.includes('shopeepay')) methodCode = 'shopeepay';
+    } else if (kind === 'va') {
+      // Auto-pick the first available VA method (Midtrans will handle specific bank UI)
+      const firstVa = methods.find(m => m.startsWith('va_'));
+      if (firstVa) methodCode = firstVa;
+    } else if (kind === 'transfer') {
+      // Prefer Permata VA if available, else first VA as generic transfer
+      methodCode = methods.includes('va_permata') ? 'va_permata' : (methods.find(m => m.startsWith('va_')) || '');
+    }
+    if (methodCode) {
+      setSelectedGateway('midtrans');
+      setSelectedMethod(methodCode);
+    }
+    setShowMethodModal(false);
+    // Submit the form; handleSubmit will use selectedGateway/selectedMethod
+    formRef.current?.requestSubmit();
+  }
+
+  // removed sub-VA chooser; Midtrans UI will present bank choices
 
   // Auto-check helpers: debounce, abort, cache, throttle (2s between successes)
   const debounceRef = useMemo(() => ({ t: 0 as any }), []);
@@ -271,7 +337,10 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
       userId: combinedUserId,
       email: sessionEmail,
       nominal: form.nominal.value,
-      price: selectedPrice ?? 0,
+  // Include gateway fee into final price
+  price: (selectedPrice ?? 0) + (selectedGateway === 'midtrans' ? Number(methodFees[selectedMethod] || 0) : 0),
+  // Pass through fee breakdown for storage/analysis
+  gatewayFee: selectedGateway === 'midtrans' ? Number(methodFees[selectedMethod] || 0) : 0,
     };
   if (selectedGateway) data.gateway = selectedGateway;
   if (selectedMethod) data.method = selectedMethod;
@@ -314,7 +383,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   }
 
   return (
-    <form className="bg-[#fefefe] rounded-xl border border-slate-200 shadow p-5 flex flex-col gap-4" onSubmit={handleSubmit}>
+    <form ref={formRef} className="bg-[#fefefe] rounded-xl border border-slate-200 shadow p-5 flex flex-col gap-4" onSubmit={handleSubmit}>
       {/* Game ID input */}
       {code === "mlbb" ? (
         <div className="grid grid-cols-2 gap-3">
@@ -537,9 +606,10 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
           )}
         </div>
         <button
-          type="submit"
+          type="button"
           className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded px-4 py-2 font-semibold"
           disabled={loading || (activeVariants.length > 0 && selectedIndex < 0)}
+          onClick={beginPayment}
         >
           {loading && (
             <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
@@ -547,24 +617,109 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
             </svg>
           )}
-          {loading ? "Memproses…" : (selectedPrice ? `Checkout (Rp ${selectedPrice.toLocaleString()})` : "Checkout")}
+          {loading ? "Memproses…" : "Pembayaran"}
         </button>
       </div>
 
       {message && <div className="mt-2 text-green-600 text-center">{message}</div>}
-  {/* Snap popup is used; no iframe embedding needed */}
-      {/* Login popup */}
+      {/* Payment Method Modal */}
+      {showMethodModal && (
+        <div className="fixed inset-0 z-[95]">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowMethodModal(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div className="text-base font-semibold text-slate-900">Pilih Metode Pembayaran</div>
+                <button type="button" onClick={() => setShowMethodModal(false)} className="p-1 rounded text-slate-500 hover:bg-slate-100">✕</button>
+              </div>
+              <div className="p-3">
+                {/* GimCash */}
+                <div className="mb-2 flex items-center justify-between rounded-lg border border-slate-200 p-3">
+                  <div className="flex items-center gap-3">
+                    <img src="/images/logo/logo128.png" alt="GimCash" className="object-contain" style={{ width: 40, height: 40 }} />
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">GimCash</div>
+                      <div className="text-xs text-slate-600">Balance: {walletBalance == null ? '—' : `Rp ${walletBalance.toLocaleString()}`}</div>
+                      <div className="text-xs text-green-700">Biaya admin: Rp 0</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a href="/account" className="text-xs px-2 py-1 rounded border border-blue-600 text-blue-700 hover:bg-blue-50">Topup</a>
+                    <button type="button" className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-500 cursor-not-allowed" disabled>Gunakan</button>
+                  </div>
+                </div>
+
+                {/* Midtrans methods */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* QRIS */}
+                  <button type="button" onClick={() => chooseMethodAndPay('qris')} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-800 hover:border-slate-300">
+                    <span className="flex items-center gap-2 w-full">
+                      <img src="/images/iconpayment/qris.png" alt="QRIS" className="object-contain" style={{ width: 40, height: 40 }} />
+                      <span className="flex-1 ml-2 text-left">
+                        <div>QRIS</div>
+                        <div className="text-[10px] leading-tight text-slate-600">+Biaya: Rp {Number(methodFees['qris'] || 0).toLocaleString()}</div>
+                      </span>
+                    </span>
+                  </button>
+                  {/* Virtual Account */}
+                  <button type="button" onClick={() => chooseMethodAndPay('va')} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-800 hover:border-slate-300">
+                    <span className="flex items-center gap-2 w-full">
+                      <img src="/images/iconpayment/va.png" alt="Virtual Account" className="object-contain" style={{ width: 40, height: 40 }} />
+                      <span className="flex-1 ml-2 text-left">
+                        <div>Virtual Account</div>
+                        <div className="text-[10px] leading-tight text-slate-600">+Biaya: Rp {(() => {
+                          const vaKeys = Object.keys(methodFees || {}).filter(k => k.startsWith('va_'));
+                          const vals = vaKeys.map(k => Number(methodFees[k] || 0));
+                          const min = vals.length ? Math.min(...vals) : 0;
+                          return min.toLocaleString();
+                        })()}</div>
+                      </span>
+                    </span>
+                  </button>
+                  {/* E-Money (GoPay/ShopeePay) */}
+                  <button type="button" onClick={() => chooseMethodAndPay('emoney')} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-800 hover:border-slate-300">
+                    <span className="flex items-center gap-2 w-full">
+                      <img src="/images/iconpayment/emoney.png" alt="E-Money" className="object-contain" style={{ width: 40, height: 40 }} />
+                      <span className="flex-1 ml-2 text-left">
+                        <div>E-Money</div>
+                        <div className="text-[10px] leading-tight text-slate-600">+Biaya: Rp {(() => {
+                          const fees:number[] = [];
+                          if (methodFees['gopay'] != null) fees.push(Number(methodFees['gopay'] || 0));
+                          if (methodFees['shopeepay'] != null) fees.push(Number(methodFees['shopeepay'] || 0));
+                          const min = fees.length ? Math.min(...fees) : 0;
+                          return min.toLocaleString();
+                        })()}</div>
+                      </span>
+                    </span>
+                  </button>
+                  {/* Transfer Bank (fallback to Permata VA) */}
+                  <button type="button" onClick={() => chooseMethodAndPay('transfer')} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-800 hover:border-slate-300">
+                    <span className="flex items-center gap-2 w-full">
+                      <img src="/images/iconpayment/bank.png" alt="Transfer Bank" className="object-contain" style={{ width: 40, height: 40 }} />
+                      <span className="flex-1 ml-2 text-left">
+                        <div>Transfer Bank</div>
+                        <div className="text-[10px] leading-tight text-slate-600">+Biaya: Rp {Number(methodFees['va_permata'] || 0).toLocaleString()}</div>
+                      </span>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Login Modal */}
       {showLogin && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowLogin(false)} />
           <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white shadow-lg border border-slate-200 p-5">
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">Masuk untuk Checkout</h3>
-            <p className="text-sm text-slate-600 mb-4">Silakan masuk dengan Google untuk melanjutkan pembayaran.</p>
-            <div className="flex items-center gap-3">
+            <div className="mb-3 text-base font-semibold text-slate-900">Masuk untuk melanjutkan</div>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 className="flex-1 inline-flex items-center justify-center gap-2 bg-[#0d6efd] hover:bg-[#0b5ed7] text-white rounded px-4 py-2 font-semibold"
-                onClick={() => signIn("google", { callbackUrl: typeof window !== 'undefined' ? window.location.href : '/' })}
+                onClick={() => signIn('google', { callbackUrl: typeof window !== 'undefined' ? window.location.href : '/' })}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-5 h-5">
                   <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12 s5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C33.046,6.053,28.757,4,24,4C12.955,4,4,12.955,4,24 s8.955,20,20,20s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>

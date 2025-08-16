@@ -63,7 +63,7 @@ export default function XenditPage() {
           <div className="text-xs text-slate-500 mb-1">Opsi Pembayaran</div>
           <div className="flex flex-wrap gap-3 text-sm">
             {[
-              ["OVO","ovo"], ["Dana","dana"], ["LinkAja","linkaja"], ["ShopeePay","shopeepay"], ["QRIS","qris"], ["VA BCA","va_bca"], ["VA BNI","va_bni"], ["VA BRI","va_bri"],
+              ["OVO","ovo"], ["Dana","dana"], ["LinkAja","linkaja"], ["ShopeePay","shopeepay"], ["QRIS","qris"], ["Virtual Account BCA","va_bca"], ["Virtual Account BNI","va_bni"], ["Virtual Account BRI","va_bri"],
             ].map(([label, key]) => (
               <label key={key} className="inline-flex items-center gap-2">
                 <input type="checkbox" checked={methods.includes(String(key))} onChange={() => toggleMethod(String(key))} />

@@ -9,6 +9,7 @@ type DummyTxn = {
   target: string;
   amount: number;
   status: "Sukses" | "Pending" | "Diproses" | "Gagal";
+  method?: string;
 };
 
 const dummyTxns: DummyTxn[] = [];
@@ -27,6 +28,53 @@ export default function TransactionsPage() {
   const [selected, setSelected] = useState<null | DummyTxn>(null);
   const [items, setItems] = useState<DummyTxn[]>([]);
   const [hasAny, setHasAny] = useState<boolean>(false);
+  const renderStatusLabel = (s: DummyTxn["status"]) => (s === "Pending" ? "Menunggu\nPembayaran" : s);
+  async function continuePayment(orderId: string) {
+    try {
+      const res = await fetch(`/api/transactions/pay?orderId=${encodeURIComponent(orderId)}`, { cache: "no-store" });
+      const j = await res.json();
+      if (!res.ok || !j?.success) {
+        // fallback: show modal details already openable via invoice
+        return;
+      }
+      const snapToken: string = j.snapToken || "";
+      const redirectUrl: string = j.snapRedirectUrl || "";
+      const clientKey: string = j.midtransClientKey || "";
+      if (!snapToken && redirectUrl) {
+        window.location.href = redirectUrl;
+        return;
+      }
+      if (snapToken) {
+        const isSandbox = redirectUrl.includes("app.sandbox.midtrans.com");
+        // Ensure snap script present
+        const scriptId = "midtrans-snap-script";
+        if (!(window as any).snap && !document.getElementById(scriptId)) {
+          await new Promise<void>((resolve, reject) => {
+            const s = document.createElement("script");
+            s.id = scriptId;
+            s.src = isSandbox ? "https://app.sandbox.midtrans.com/snap/snap.js" : "https://app.midtrans.com/snap/snap.js";
+            if (clientKey) s.setAttribute("data-client-key", clientKey);
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error("Failed to load Midtrans Snap"));
+            document.body.appendChild(s);
+          });
+        }
+        const snap: any = (window as any).snap;
+        if (snap && typeof snap.pay === "function") {
+          snap.pay(snapToken, {
+            onSuccess: () => {},
+            onPending: () => {},
+            onError: () => {},
+            onClose: () => {},
+          });
+          return;
+        }
+      }
+      if (redirectUrl) {
+        window.location.href = redirectUrl;
+      }
+    } catch {}
+  }
   const filtered = useMemo(() => {
     if (!active) return items;
     return items.filter((t) => t.status === active);
@@ -45,8 +93,8 @@ export default function TransactionsPage() {
         const q = active ? `?status=${encodeURIComponent(active)}` : "";
         const res = await fetch(`/api/transactions/me${q}`, { cache: "no-store" });
         if (!res.ok) return;
-        const data = await res.json();
-        if (!ignore && Array.isArray(data.items)) setItems(data.items);
+  const data = await res.json();
+  if (!ignore && Array.isArray(data.items)) setItems(data.items);
       } catch {}
     }
     if (session) load();
@@ -142,12 +190,12 @@ export default function TransactionsPage() {
               <tbody>
                 {pageItems.map((t) => (
                   <tr key={t.id} className="border-t border-slate-100 odd:bg-white even:bg-slate-50">
-                    <td className="px-4 py-3 font-medium whitespace-nowrap text-slate-900">
+          <td className="px-4 py-3 whitespace-nowrap">
                       <button
                         type="button"
                         title="Lihat detail transaksi"
                         onClick={() => setSelected(t)}
-                        className="text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+                        className="text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded text-[10px] leading-none font-mono"
                       >
                         {t.id}
                       </button>
@@ -155,19 +203,28 @@ export default function TransactionsPage() {
                     <td className="px-4 py-3 text-slate-800">{t.product}</td>
                     <td className="px-4 py-3 text-right text-slate-900">{formatRupiah(t.amount)}</td>
                     <td className="px-4 py-3">
-                      <span
-                        className={
-                          t.status === "Sukses"
-                            ? "inline-flex items-center px-2 py-0.5 rounded text-xs bg-green-600/10 text-green-700"
-                            : t.status === "Pending"
-                            ? "inline-flex items-center px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-700"
-                            : t.status === "Diproses"
-                            ? "inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-600/10 text-blue-700"
-                            : "inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-600/10 text-red-700"
-                        }
-                      >
-                        {t.status}
-                      </span>
+                      {t.status === "Pending" ? (
+                        <button
+                          type="button"
+                          onClick={() => continuePayment(t.id)}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-700 hover:bg-yellow-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          title="Lanjutkan pembayaran"
+                        >
+                          <span className="whitespace-pre-line text-center leading-tight">{renderStatusLabel(t.status)}</span>
+                        </button>
+                      ) : (
+                        <span
+                          className={
+                            t.status === "Sukses"
+                              ? "inline-flex items-center px-2 py-0.5 rounded text-xs bg-green-600/10 text-green-700"
+                              : t.status === "Diproses"
+                              ? "inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-600/10 text-blue-700"
+                              : "inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-600/10 text-red-700"
+                          }
+                        >
+                          <span className="whitespace-pre-line text-center leading-tight">{renderStatusLabel(t.status)}</span>
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -271,21 +328,43 @@ export default function TransactionsPage() {
                     <div className="col-span-1 text-slate-500">Jumlah</div>
                     <div className="col-span-2 font-medium text-slate-900">{formatRupiah(selected.amount)}</div>
 
+                    <div className="col-span-1 text-slate-500">Metode</div>
+                    <div className="col-span-2">{selected.method || '-'}</div>
+
                     <div className="col-span-1 text-slate-500">Status</div>
-                    <div className="col-span-2">
-                      <span
-                        className={
-                          selected.status === "Sukses"
-                            ? "inline-flex items-center px-2 py-0.5 rounded text-xs bg-green-600/10 text-green-700"
-                            : selected.status === "Pending"
-                            ? "inline-flex items-center px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-700"
-                            : selected.status === "Diproses"
-                            ? "inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-600/10 text-blue-700"
-                            : "inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-600/10 text-red-700"
-                        }
-                      >
-                        {selected.status}
-                      </span>
+                    <div className="col-span-2 flex items-center gap-2">
+                      {selected.status === "Pending" ? (
+                        <button
+                          type="button"
+                          onClick={() => continuePayment(selected.id)}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-700 hover:bg-yellow-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          title="Lanjutkan pembayaran"
+                        >
+                          <span className="whitespace-pre-line text-center leading-tight">{renderStatusLabel(selected.status)}</span>
+                        </button>
+                      ) : (
+                        <span
+                          className={
+                            selected.status === "Sukses"
+                              ? "inline-flex items-center px-2 py-0.5 rounded text-xs bg-green-600/10 text-green-700"
+                              : selected.status === "Diproses"
+                              ? "inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-600/10 text-blue-700"
+                              : "inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-600/10 text-red-700"
+                          }
+                        >
+                          <span className="whitespace-pre-line text-center leading-tight">{renderStatusLabel(selected.status)}</span>
+                        </span>
+                      )}
+                      {selected.status === "Pending" && (
+                        <button
+                          type="button"
+                          onClick={() => continuePayment(selected.id)}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs border border-blue-600 text-blue-700 hover:bg-blue-50"
+                          title="Lanjutkan pembayaran"
+                        >
+                          Invoice
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

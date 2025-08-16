@@ -1,20 +1,11 @@
 import { NextRequest } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDb } from "../../../../../lib/mongodb";
-import { AUTH_SECRET as CFG_AUTH } from "@/lib/runtimeConfig";
-
-function ensureAdmin(req: NextRequest) {
-  const cookie = req.cookies.get("admin_session")?.value;
-  const guard = (typeof CFG_AUTH === "string" && CFG_AUTH.length ? CFG_AUTH : undefined) || process.env.AUTH_SECRET || "dev";
-  if (!cookie || cookie !== guard) {
-    return false;
-  }
-  return true;
-}
+import { ensureAdminRequest } from "@/lib/adminAuth";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  if (!ensureAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!ensureAdminRequest(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const form = await req.formData();
   if (form.get("_method") === "DELETE") {
     try {
@@ -48,7 +39,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  if (!ensureAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!ensureAdminRequest(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const db = await getDb();
     await db.collection("promos").deleteOne({ _id: new ObjectId(id) });

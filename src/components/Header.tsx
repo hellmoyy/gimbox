@@ -94,7 +94,7 @@ export default function Header() {
       <div className="bg-[#fefefe] text-slate-800">
   <div className="mx-auto w-full max-w-md px-4 py-3 flex items-center gap-4">
           <Link href="/" className="flex items-center">
-            <img src="/images/logo-gimbox.png" alt="Logo" className="h-[28px] w-auto" />
+            <img src="/images/logo/logo-black.png" alt="Logo" className="h-[28px] w-auto" />
           </Link>
           <div className="relative flex-1 max-w-xl" ref={containerRef}>
             <input

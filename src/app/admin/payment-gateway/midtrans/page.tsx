@@ -72,7 +72,7 @@ export default function MidtransPage() {
         <div className="mt-3">
           <div className="text-xs text-slate-500 mb-1">Opsi Pembayaran</div>
           <div className="flex flex-wrap gap-3 text-sm">
-            {[ ["QRIS","qris"], ["VA BCA","va_bca"], ["VA BNI","va_bni"], ["VA BRI","va_bri"], ["Permata VA","va_permata"], ["Gopay","gopay"], ["ShopeePay","shopeepay"] ].map(([label, key]) => (
+            {[ ["QRIS","qris"], ["Virtual Account BCA","va_bca"], ["Virtual Account BNI","va_bni"], ["Virtual Account BRI","va_bri"], ["Permata Virtual Account","va_permata"], ["Gopay","gopay"], ["ShopeePay","shopeepay"] ].map(([label, key]) => (
               <label key={String(key)} className="inline-flex items-center gap-2">
                 <input type="checkbox" checked={methods.includes(String(key))} onChange={() => toggleMethod(String(key))} />
                 <span>{label}</span>

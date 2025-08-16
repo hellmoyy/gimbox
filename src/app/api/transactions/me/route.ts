@@ -53,6 +53,12 @@ export async function GET(req: NextRequest) {
           sellPrice: 1,
           status: 1,
           createdAt: 1,
+          paymentGateway: 1,
+          // Minimal Midtrans fields to derive payment method
+          "midtransNotification.payment_type": 1,
+          "midtransNotification.va_numbers": 1,
+          "midtransNotification.bank": 1,
+          "midtransNotification.store": 1,
         },
       })
       .sort({ createdAt: -1 })
@@ -66,6 +72,32 @@ export async function GET(req: NextRequest) {
       nameByCode = Object.fromEntries(prods.map((p: any) => [p.code, p.name]));
     }
 
+    function deriveMethod(r: any): string {
+      const pt = r?.midtransNotification?.payment_type;
+      if (pt) {
+        const v = String(pt).toLowerCase();
+        if (v === "qris") return "QRIS";
+        if (v === "gopay") return "GoPay";
+        if (v === "shopeepay") return "ShopeePay";
+        if (v === "credit_card") return "Kartu Kredit";
+        if (v === "cstore") {
+          const store = String(r?.midtransNotification?.store || "").toUpperCase();
+          return store || "Gerai";
+        }
+        if (v === "bank_transfer") {
+          const va = Array.isArray(r?.midtransNotification?.va_numbers) ? r.midtransNotification.va_numbers[0] : null;
+          const bank = String(va?.bank || r?.midtransNotification?.bank || "").toUpperCase();
+          return bank ? `${bank} Virtual Account` : "Bank Transfer";
+        }
+        if (v === "echannel") return "Mandiri Bill";
+        if (v === "permata") return "Permata Virtual Account";
+        return v.charAt(0).toUpperCase() + v.slice(1);
+      }
+      // Fallback to payment gateway name
+      const gw = String(r?.paymentGateway || "").trim();
+      return gw ? gw.charAt(0).toUpperCase() + gw.slice(1) : "-";
+    }
+
     const items = rows.map((r: any) => ({
       id: r.orderId,
       date: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt || ""),
@@ -73,6 +105,7 @@ export async function GET(req: NextRequest) {
       target: r.userId || r.email,
       amount: Number(r.sellPrice || 0),
       status: mapStatus(r.status),
+      method: deriveMethod(r),
     }));
 
     return NextResponse.json({ success: true, items });

@@ -1,14 +1,9 @@
 import { NextRequest } from "next/server";
 import { getDb } from "../../../../lib/mongodb";
-
-function ensureAdmin(req: NextRequest) {
-  const cookie = req.cookies.get("admin_session")?.value;
-  if (!cookie || cookie !== (process.env.AUTH_SECRET || "dev")) return false;
-  return true;
-}
+import { ensureAdminRequest } from "@/lib/adminAuth";
 
 export async function POST(req: NextRequest) {
-  if (!ensureAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!ensureAdminRequest(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const form = await req.formData();
   const doc: any = {
     name: String(form.get("name") || ""),
