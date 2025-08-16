@@ -26,6 +26,7 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
   const [message, setMessage] = useState("");
   const [snapToken, setSnapToken] = useState("");
   const [snapUrl, setSnapUrl] = useState("");
+  const [midtransClientKey, setMidtransClientKey] = useState<string>("");
   const [gateways, setGateways] = useState<Array<{ name: string; enabled: boolean; methods: string[] }>>([]);
   const [selectedGateway, setSelectedGateway] = useState<string>("midtrans");
   const [selectedMethod, setSelectedMethod] = useState<string>("");
@@ -107,6 +108,25 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
   const cacheRef = useMemo(() => new Map<string, { ok: boolean; username?: string; region?: string; ts: number }>(), []);
   const lastSuccessAtRef = useMemo(() => ({ ts: 0 }), []);
   const onlyDigits = (v: string) => v.replace(/\D+/g, "");
+
+  async function loadMidtransSnap(clientKey: string, sandbox: boolean) {
+    if (!clientKey) throw new Error("Missing Midtrans client key");
+    // If already loaded, return
+    if (typeof window !== "undefined" && (window as any).snap) return;
+    const scriptId = "midtrans-snap-script";
+    if (document.getElementById(scriptId)) return;
+    await new Promise<void>((resolve, reject) => {
+      const s = document.createElement("script");
+      s.id = scriptId;
+      s.src = sandbox
+        ? "https://app.sandbox.midtrans.com/snap/snap.js"
+        : "https://app.midtrans.com/snap/snap.js";
+      s.setAttribute("data-client-key", clientKey);
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error("Failed to load Midtrans Snap"));
+      document.body.appendChild(s);
+    });
+  }
 
   // Auto-check effect for MLBB (debounced + throttled + abortable + cached)
   useEffect(() => {
@@ -266,9 +286,30 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
     setMessage(result.message || "");
     if (result.snapToken) setSnapToken(result.snapToken);
     if (result.snapRedirectUrl) setSnapUrl(result.snapRedirectUrl);
-    if (result.snapRedirectUrl) {
-      // Prefer full-page redirect for better compatibility
-      window.location.href = result.snapRedirectUrl;
+    if (result.midtransClientKey) setMidtransClientKey(result.midtransClientKey);
+
+    // Midtrans Snap popup integration (preferred over redirect)
+    if (result.snapToken && selectedGateway === "midtrans") {
+      const redirectUrl: string = result.snapRedirectUrl || "";
+      const isSandbox = redirectUrl.includes("app.sandbox.midtrans.com");
+      try {
+        await loadMidtransSnap(result.midtransClientKey || "", isSandbox);
+        const snap: any = (window as any).snap;
+        if (snap && typeof snap.pay === "function") {
+          snap.pay(result.snapToken, {
+            onSuccess: () => { /* optional: show success message; webhook will finalize */ },
+            onPending: () => { /* optional */ },
+            onError: () => { /* optional */ },
+            onClose: () => { /* optional */ },
+          });
+          return;
+        }
+      } catch {
+        // fall through to redirect if popup fails to init
+      }
+      if (redirectUrl) {
+        window.location.href = redirectUrl;
+      }
     }
   }
 
@@ -511,15 +552,7 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
       </div>
 
       {message && <div className="mt-2 text-green-600 text-center">{message}</div>}
-      {snapToken && (
-        <div className="mt-4">
-          <iframe
-            src={`https://app.sandbox.midtrans.com/snap/v2/vtweb/${snapToken}`}
-            title="Midtrans Payment"
-            className="w-full h-[600px] border rounded"
-          />
-        </div>
-      )}
+  {/* Snap popup is used; no iframe embedding needed */}
       {/* Login popup */}
       {showLogin && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center">
