@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
+import * as CFG from "@/lib/runtimeConfig";
 
 export async function GET() {
   const checks: Record<string, any> = {
@@ -9,6 +10,17 @@ export async function GET() {
       GOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
       GOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET,
       MONGODB_URI: !!process.env.MONGODB_URI,
+    },
+    hardcoded: {
+      NEXTAUTH_URL: !!CFG.NEXTAUTH_URL,
+      NEXTAUTH_SECRET: !!CFG.NEXTAUTH_SECRET,
+      GOOGLE_CLIENT_ID: !!CFG.GOOGLE_CLIENT_ID,
+      GOOGLE_CLIENT_SECRET: !!CFG.GOOGLE_CLIENT_SECRET,
+      MONGODB_URI: !!CFG.MONGODB_URI,
+      MIDTRANS_SERVER_KEY: !!CFG.MIDTRANS_SERVER_KEY,
+      MIDTRANS_CLIENT_KEY: !!CFG.MIDTRANS_CLIENT_KEY,
+      VCGAMERS_API_KEY: !!CFG.VCGAMERS_API_KEY,
+      VCGAMERS_SECRET_KEY: !!CFG.VCGAMERS_SECRET_KEY,
     },
   };
 

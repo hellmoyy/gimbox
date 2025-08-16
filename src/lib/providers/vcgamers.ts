@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import crypto from "crypto";
+import { VCGAMERS_API_KEY as CFG_KEY, VCGAMERS_SECRET_KEY as CFG_SECRET, VCGAMERS_SANDBOX as CFG_SANDBOX } from "../runtimeConfig";
 
 export type VCGOrderRequest = {
   productCode: string;
@@ -18,7 +19,7 @@ export type VCGOrderResponse = {
 };
 
 function baseUrl() {
-  const sandbox = process.env.VCGAMERS_SANDBOX === "true";
+  const sandbox = typeof CFG_SANDBOX === "boolean" ? CFG_SANDBOX : process.env.VCGAMERS_SANDBOX === "true";
   // TODO: Verify base URLs from official docs
   return sandbox
     ? "https://sandbox-api.vcgamers.com"
@@ -26,8 +27,8 @@ function baseUrl() {
 }
 
 function getKeys() {
-  const apiKey = process.env.VCGAMERS_API_KEY || "";
-  const secret = process.env.VCGAMERS_SECRET_KEY || "";
+  const apiKey = (typeof CFG_KEY === "string" && CFG_KEY.length ? CFG_KEY : undefined) || process.env.VCGAMERS_API_KEY || "";
+  const secret = (typeof CFG_SECRET === "string" && CFG_SECRET.length ? CFG_SECRET : undefined) || process.env.VCGAMERS_SECRET_KEY || "";
   if (!apiKey || !secret) throw new Error("VCGAMERS api key/secret missing in env");
   return { apiKey, secret };
 }

@@ -1,7 +1,9 @@
 import { MongoClient, MongoClientOptions, Db } from "mongodb";
+import { MONGODB_URI as CFG_URI, MONGO_TIMEOUT_MS, MONGO_DIRECT } from "./runtimeConfig";
 
 // Lazily connect on first use; avoid connecting at import time to reduce noisy failures in dev
-const uri = process.env.MONGODB_URI as string | undefined;
+const cfgUri: string | undefined = typeof CFG_URI === "string" && CFG_URI.length ? CFG_URI : undefined;
+const uri = (cfgUri ? cfgUri.trim() : undefined) || (process.env.MONGODB_URI as string | undefined);
 if (!uri) {
   // Do not throw at import time in Next.js; runtime checks will handle
   console.warn("[mongodb] MONGODB_URI is not set");
@@ -9,9 +11,14 @@ if (!uri) {
 
 const options: MongoClientOptions = {
   // Be a bit more tolerant in production environments like Railway
-  serverSelectionTimeoutMS: Number(process.env.MONGO_TIMEOUT_MS || 8000),
+  serverSelectionTimeoutMS: Number(MONGO_TIMEOUT_MS ?? process.env.MONGO_TIMEOUT_MS ?? 8000),
   // Hint: for some providers direct connection can help; safe to leave undefined otherwise
-  directConnection: process.env.MONGO_DIRECT === "true" ? true : undefined,
+  directConnection:
+    typeof MONGO_DIRECT === "boolean"
+      ? (MONGO_DIRECT as boolean)
+      : process.env.MONGO_DIRECT === "true"
+        ? true
+        : undefined,
 };
 
 declare global {

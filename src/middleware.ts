@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { AUTH_SECRET as CFG_AUTH } from "./lib/runtimeConfig";
 import type { NextRequest } from "next/server";
 
 export function middleware(req: NextRequest) {
@@ -7,7 +8,8 @@ export function middleware(req: NextRequest) {
   const isLoginPath = pathname === "/admin/login";
   if (isAdminPath && !isLoginPath) {
     const cookie = req.cookies.get("admin_session")?.value;
-    if (!cookie || cookie !== (process.env.AUTH_SECRET || "dev")) {
+  const guard = (typeof CFG_AUTH === "string" && CFG_AUTH.length ? CFG_AUTH : undefined) || process.env.AUTH_SECRET || "dev";
+  if (!cookie || cookie !== guard) {
       const loginUrl = new URL("/admin/login", req.url);
       return NextResponse.redirect(loginUrl);
     }

@@ -5,8 +5,9 @@ import { getDb } from "../../../lib/mongodb";
 const DIGIFLAZZ_URL = "https://api.digiflazz.com/v1/transaction";
 const API_KEY = process.env.DIGIFLAZZ_API_KEY;
 const USERNAME = process.env.DIGIFLAZZ_USERNAME;
-const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY;
-const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY;
+import { MIDTRANS_SERVER_KEY as CFG_MID_SERVER, MIDTRANS_CLIENT_KEY as CFG_MID_CLIENT } from "@/lib/runtimeConfig";
+const MIDTRANS_SERVER_KEY = (typeof CFG_MID_SERVER === "string" && CFG_MID_SERVER.length ? CFG_MID_SERVER : undefined) || process.env.MIDTRANS_SERVER_KEY;
+const MIDTRANS_CLIENT_KEY = (typeof CFG_MID_CLIENT === "string" && CFG_MID_CLIENT.length ? CFG_MID_CLIENT : undefined) || process.env.MIDTRANS_CLIENT_KEY;
 const MIDTRANS_IS_PRODUCTION = process.env.MIDTRANS_IS_PRODUCTION === "true";
 
 function getSignature(

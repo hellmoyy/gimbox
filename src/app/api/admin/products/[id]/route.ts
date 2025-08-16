@@ -1,10 +1,12 @@
 import { NextRequest } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDb } from "../../../../../lib/mongodb";
+import { AUTH_SECRET as CFG_AUTH } from "@/lib/runtimeConfig";
 
 function ensureAdmin(req: NextRequest) {
   const cookie = req.cookies.get("admin_session")?.value;
-  if (!cookie || cookie !== (process.env.AUTH_SECRET || "dev")) {
+  const guard = (typeof CFG_AUTH === "string" && CFG_AUTH.length ? CFG_AUTH : undefined) || process.env.AUTH_SECRET || "dev";
+  if (!cookie || cookie !== guard) {
     return false;
   }
   return true;
