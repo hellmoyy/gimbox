@@ -22,6 +22,9 @@ export async function GET() {
       VCGAMERS_API_KEY: !!CFG.VCGAMERS_API_KEY,
       VCGAMERS_SECRET_KEY: !!CFG.VCGAMERS_SECRET_KEY,
     },
+    values: {
+      NEXTAUTH_URL: process.env.NEXTAUTH_URL || CFG.NEXTAUTH_URL || null,
+    },
   };
 
   try {
