@@ -10,9 +10,9 @@ function ensureAdmin(req: NextRequest) {
   return true;
 }
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
   if (!ensureAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  const { id } = params;
   try {
     const db = await getDb();
     const existing = await db.collection("products").findOne({ _id: new ObjectId(id) });
