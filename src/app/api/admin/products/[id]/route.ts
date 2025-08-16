@@ -10,7 +10,8 @@ function ensureAdmin(req: NextRequest) {
   return true;
 }
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
   // Using POST for HTML form compatibility
   if (!ensureAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const form = await req.formData();
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (form.get("_method") === "DELETE") {
     try {
       const db = await getDb();
-      await db.collection("products").deleteOne({ _id: new ObjectId(params.id) });
+      await db.collection("products").deleteOne({ _id: new ObjectId(id) });
     } catch (e: any) {
       const msg = e?.name === "MongoServerSelectionError" ? "Database unavailable" : "Invalid ID";
       return Response.json({ error: msg }, { status: 400 });
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       );
       update.category = code;
     }
-    await db.collection("products").updateOne({ _id: new ObjectId(params.id) }, { $set: update });
+    await db.collection("products").updateOne({ _id: new ObjectId(id) }, { $set: update });
   } catch (e: any) {
     const msg = e?.name === "MongoServerSelectionError" ? "Database unavailable" : "Invalid ID";
     return Response.json({ error: msg }, { status: 400 });
@@ -76,11 +77,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   return Response.redirect(new URL("/admin/products", req.url));
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
   if (!ensureAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const db = await getDb();
-    await db.collection("products").deleteOne({ _id: new ObjectId(params.id) });
+    await db.collection("products").deleteOne({ _id: new ObjectId(id) });
   } catch (e: any) {
     const msg = e?.name === "MongoServerSelectionError" ? "Database unavailable" : "Invalid ID";
     return Response.json({ error: msg }, { status: 400 });

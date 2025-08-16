@@ -8,14 +8,15 @@ function ensureAdmin(req: NextRequest) {
   return true;
 }
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
   if (!ensureAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const form = await req.formData();
 
   if (form.get("_method") === "DELETE") {
     try {
       const db = await getDb();
-      await db.collection("categories").deleteOne({ _id: new ObjectId(params.id) });
+  await db.collection("categories").deleteOne({ _id: new ObjectId(id) });
     } catch (e: any) {
       const msg = e?.name === "MongoServerSelectionError" ? "Database unavailable" : "Invalid ID";
       return Response.json({ error: msg }, { status: 400 });
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   };
   try {
     const db = await getDb();
-    await db.collection("categories").updateOne({ _id: new ObjectId(params.id) }, { $set: update });
+  await db.collection("categories").updateOne({ _id: new ObjectId(id) }, { $set: update });
   } catch (e: any) {
     const msg = e?.name === "MongoServerSelectionError" ? "Database unavailable" : "Invalid ID";
     return Response.json({ error: msg }, { status: 400 });
