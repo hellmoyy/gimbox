@@ -8,6 +8,8 @@ const handler = NextAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
+  // Ensure production runs have a stable secret; prefer NEXTAUTH_SECRET, fallback to AUTH_SECRET
+  secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
   session: { strategy: "jwt" },
   callbacks: {
     async jwt({ token, account, profile }) {

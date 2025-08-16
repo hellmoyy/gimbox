@@ -8,8 +8,10 @@ if (!uri) {
 }
 
 const options: MongoClientOptions = {
-  // Fail fast if server selection (or DNS) cannot resolve
-  serverSelectionTimeoutMS: 3000,
+  // Be a bit more tolerant in production environments like Railway
+  serverSelectionTimeoutMS: Number(process.env.MONGO_TIMEOUT_MS || 8000),
+  // Hint: for some providers direct connection can help; safe to leave undefined otherwise
+  directConnection: process.env.MONGO_DIRECT === "true" ? true : undefined,
 };
 
 declare global {
