@@ -9,7 +9,7 @@ export default async function TopupPage({ params }: { params: Promise<{ code: st
 
   return (
     <main>
-      <div className="max-w-md mx-auto px-4 py-8">
+      <div className="max-w-md mx-auto px-4 pt-8 pb-28">
         <h1 className="text-2xl font-bold mb-2 text-center text-slate-900">Topup {product.name}</h1>
         <div className="flex flex-col items-center mb-5">
           <img
@@ -24,6 +24,7 @@ export default async function TopupPage({ params }: { params: Promise<{ code: st
           code={product.code}
           price={product?.variants?.find((v: any) => (v.isActive ?? true) !== false)?.price || 10000}
           variants={Array.isArray(product?.variants) ? product.variants : undefined}
+          hidePaymentMethods
         />
       </div>
     </main>

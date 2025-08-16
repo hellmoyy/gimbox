@@ -13,7 +13,7 @@ export type Variant = {
   region?: string | null;
 };
 
-export default function TopupForm({ code, price, variants }: { code: string; price: number; variants?: Variant[] }) {
+export default function TopupForm({ code, price, variants, hidePaymentMethods }: { code: string; price: number; variants?: Variant[]; hidePaymentMethods?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   // Controlled MLBB inputs to enable numeric enforcement & auto-check
@@ -487,8 +487,8 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
         </div>
       )}
 
-      {/* Payment method selection */}
-      {gateways.length > 0 && (
+  {/* Payment method selection (hidden on topup page when hidePaymentMethods is true) */}
+  {!hidePaymentMethods && gateways.length > 0 && (
         <div className="rounded-lg border p-3">
           <div className="text-sm font-semibold text-slate-900 mb-1">Metode Pembayaran</div>
           <div className="flex flex-col gap-2">

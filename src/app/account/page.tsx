@@ -1,9 +1,25 @@
 "use client";
 import { useSession, signIn, signOut } from "next-auth/react";
+import { useEffect, useState } from "react";
 
 export default function AccountPage() {
   const { data: session, status } = useSession();
   const loading = status === "loading";
+  const [gimCash, setGimCash] = useState<number | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+    async function loadWallet() {
+      try {
+        const res = await fetch("/api/wallet/me", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!ignore) setGimCash(typeof data.balance === "number" ? data.balance : 0);
+      } catch {}
+    }
+    if (session) loadWallet();
+    return () => { ignore = true; };
+  }, [session]);
   return (
     <main className="min-h-screen pb-24">
       <div className="mx-auto w-full max-w-md md:max-w-6xl px-4 mt-6">
@@ -17,6 +33,26 @@ export default function AccountPage() {
                 <div className="mt-3 text-lg font-semibold text-slate-900">{session.user?.name || "Pengguna"}</div>
                 <div className="text-xs text-slate-500">{session.user?.email}</div>
                 <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-medium">Google</div>
+
+                {/* GimCash */}
+                <div className="mt-4 text-left">
+                  <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-amber-50 to-orange-50 p-4">
+                    <div className="flex items-center gap-3">
+                      <img src="/images/gimcash.png" alt="GimCash" className="w-6 h-6 rounded" />
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">GimCash</div>
+                        <div className="text-[11px] text-slate-500">Saldo virtual kamu</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 text-2xl font-bold text-slate-900">
+                      {gimCash === null ? "—" : new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(gimCash)}
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <a href="#" className="inline-flex items-center px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold disabled:opacity-60">Top Up (soon)</a>
+                      <a href="#" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold bg-white">Riwayat</a>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
                   <a href="/transactions" className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-slate-700">Transaksi</a>
