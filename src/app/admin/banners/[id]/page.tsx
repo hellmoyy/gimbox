@@ -5,13 +5,14 @@ import DeleteButton from "../../../../components/admin/DeleteButton";
 
 export const dynamic = "force-dynamic";
 
-export default async function BannerEditor({ params }: { params: { id: string } }) {
-  const isNew = params.id === "new";
+export default async function BannerEditor({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const isNew = id === "new";
   let banner: any = { image: "", sort: 0, isActive: true };
   if (!isNew) {
     try {
       const db = await getDb();
-      const found = await db.collection("banners").findOne({ _id: new ObjectId(params.id) });
+      const found = await db.collection("banners").findOne({ _id: new ObjectId(id) });
       if (found) banner = found;
     } catch {}
   }
@@ -19,7 +20,7 @@ export default async function BannerEditor({ params }: { params: { id: string } 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-4">{isNew ? "Tambah" : "Edit"} Banner</h1>
-      <form method="POST" action={`/api/admin/banners/${isNew ? "create" : params.id}`}
+  <form method="POST" action={`/api/admin/banners/${isNew ? "create" : id}`}
         className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-4">
           <div className="flex items-center gap-4">
@@ -37,7 +38,7 @@ export default async function BannerEditor({ params }: { params: { id: string } 
           </div>
           {!isNew && (
             <div>
-              <DeleteButton actionUrl={`/api/admin/banners/${params.id}`} confirmText="Hapus banner ini?" />
+              <DeleteButton actionUrl={`/api/admin/banners/${id}`} confirmText="Hapus banner ini?" />
             </div>
           )}
         </div>

@@ -9,7 +9,7 @@ type Product = {
   discountPercent?: number;
 };
 
-export default function CategoryGrid({ items, showLimit = 6 }: { items: Product[]; showLimit?: number }) {
+export default function CategoryGrid({ items, showLimit = 8 }: { items: Product[]; showLimit?: number }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? items : items.slice(0, showLimit);
   const hasMore = items.length > showLimit && !expanded;

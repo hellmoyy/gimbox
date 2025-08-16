@@ -97,7 +97,7 @@ export default async function Home() {
         {featured.length === 0 ? (
           <div className="text-sm text-slate-500">Belum ada produk featured.</div>
         ) : (
-          <CategoryGrid items={featured as any} showLimit={6} />
+          <CategoryGrid items={featured as any} showLimit={8} />
         )}
       </Section>
 
@@ -105,7 +105,7 @@ export default async function Home() {
         {newRelease.length === 0 ? (
           <div className="text-sm text-slate-500">Belum ada produk baru rilis.</div>
         ) : (
-          <CategoryGrid items={newRelease as any} showLimit={6} />
+          <CategoryGrid items={newRelease as any} showLimit={8} />
         )}
       </Section>
 
@@ -113,7 +113,7 @@ export default async function Home() {
         {voucher.length === 0 ? (
           <div className="text-sm text-slate-500">Belum ada produk voucher.</div>
         ) : (
-          <CategoryGrid items={voucher as any} showLimit={6} />
+          <CategoryGrid items={voucher as any} showLimit={8} />
         )}
       </Section>
 
@@ -121,7 +121,7 @@ export default async function Home() {
         {pulsaTagihan.length === 0 ? (
           <div className="text-sm text-slate-500">Belum ada produk pulsa & tagihan.</div>
         ) : (
-          <CategoryGrid items={pulsaTagihan as any} showLimit={6} />
+          <CategoryGrid items={pulsaTagihan as any} showLimit={8} />
         )}
       </Section>
 
@@ -129,7 +129,7 @@ export default async function Home() {
         {entertainment.length === 0 ? (
           <div className="text-sm text-slate-500">Belum ada produk entertainment.</div>
         ) : (
-          <CategoryGrid items={entertainment as any} showLimit={6} />
+          <CategoryGrid items={entertainment as any} showLimit={8} />
         )}
       </Section>
 
@@ -137,7 +137,7 @@ export default async function Home() {
         {all.length === 0 ? (
           <div className="text-sm text-slate-500 mt-2">Belum ada data game.</div>
         ) : (
-          <CategoryGrid items={all as any} showLimit={6} />
+          <CategoryGrid items={all as any} showLimit={8} />
         )}
       </Section>
 

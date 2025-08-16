@@ -2,8 +2,9 @@ import { notFound } from "next/navigation";
 import { getProductByCode } from "../../../lib/products";
 import TopupForm from "../../../components/TopupForm";
 
-export default async function TopupPage({ params }: { params: { code: string } }) {
-  const product: any = await getProductByCode(params.code);
+export default async function TopupPage({ params }: { params: Promise<{ code: string }> }) {
+  const { code } = await params;
+  const product: any = await getProductByCode(code);
   if (!product) return notFound();
 
   return (
