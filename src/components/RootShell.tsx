@@ -14,6 +14,7 @@ export default function RootShell({ children }: { children: React.ReactNode }) {
   // Public app shell with mobile-centered container and bottom nav
   return (
     <div className="min-h-screen flex flex-col items-center bg-black">
+      {/* The pb-24 reserves space for BottomNav; when BottomNav hides (keyboard open), it remains harmless */}
       <div className="w-full max-w-md flex-1 flex flex-col md:rounded-2xl/3 bg-[#f7f7f7] pb-24">
         {children}
       </div>

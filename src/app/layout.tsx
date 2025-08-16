@@ -41,6 +41,8 @@ export default function RootLayout({
   <html lang="id">
   <body className={`${geistSans.variable} ${geistMono.variable} ${rajdhani.variable} antialiased`}>
     <meta name="theme-color" content="#0d6efd" />
+    {/* iOS viewport stability */}
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <AuthProvider>
           {/* RootShell renders PWA container for public, desktop for /admin */}
           <RootShell>

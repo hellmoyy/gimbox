@@ -124,6 +124,7 @@ const nav: NavItem[] = [
       { href: "/admin/payment-gateway/xendit", label: "Xendit", icon: icons.dot },
       { href: "/admin/payment-gateway/midtrans", label: "Midtrans", icon: icons.dot },
       { href: "/admin/payment-gateway/moota", label: "Moota", icon: icons.dot },
+  { href: "/admin/webhook-logs", label: "Webhook Logs", icon: icons.dot },
     ],
   },
   { href: "/admin/users", label: "Users", icon: icons.user },

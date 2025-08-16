@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 
     const rows = await db
       .collection("orders")
-      .find(match, {
+    .find(match, {
         projection: {
           _id: 0,
           orderId: 1,
@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
           status: 1,
           createdAt: 1,
           paymentGateway: 1,
+      method: 1,
           // Minimal Midtrans fields to derive payment method
           "midtransNotification.payment_type": 1,
           "midtransNotification.va_numbers": 1,
@@ -73,6 +74,20 @@ export async function GET(req: NextRequest) {
     }
 
     function deriveMethod(r: any): string {
+      // 1) Prefer explicitly stored intent/method on the order (from checkout selection)
+      const om = String(r?.method || "").toLowerCase();
+      if (om) {
+        if (om.includes("qris") || /\bqr\b/.test(om)) return "QRIS";
+        if (om.includes("gopay")) return "GoPay";
+        if (om.includes("shopee")) return "ShopeePay";
+        if (om.includes("ovo")) return "OVO";
+        if (om.includes("dana")) return "DANA";
+        if (om.includes("emoney") || om.includes("e-money")) return "E-Money";
+        if ((om.includes("bank") && om.includes("transfer")) || /\brek\b|\brekening\b|\btf\b|\bbca\b|\bbni\b|\bbri\b|\bmandiri\b/.test(om)) return "Bank Transfer";
+        if (om.includes("va") || om.includes("virtual account") || om.includes("virtual_account") || om.includes("permata")) return "Virtual Account";
+      }
+
+      // 2) Fallback to Midtrans notification (if any)
       const pt = r?.midtransNotification?.payment_type;
       if (pt) {
         const v = String(pt).toLowerCase();
@@ -106,6 +121,7 @@ export async function GET(req: NextRequest) {
       amount: Number(r.sellPrice || 0),
       status: mapStatus(r.status),
       method: deriveMethod(r),
+      methodRaw: String(r?.method || ""),
     }));
 
     return NextResponse.json({ success: true, items });

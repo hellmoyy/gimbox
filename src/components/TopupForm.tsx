@@ -33,6 +33,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   const [showMethodModal, setShowMethodModal] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [methodFees, setMethodFees] = useState<Record<string, number>>({});
+  const lastChosenKindRef = useRef<'qris' | 'emoney' | 'va' | 'transfer' | ''>('');
   const formRef = useRef<HTMLFormElement | null>(null);
 
   const activeVariantsAll = useMemo(() => (variants || []).filter(v => (v.isActive ?? true) !== false), [variants]);
@@ -139,9 +140,40 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   }
 
   function chooseMethodAndPay(kind: 'qris' | 'emoney' | 'va' | 'transfer') {
-    // Pick available gateway/method from config
+    lastChosenKindRef.current = kind;
+    // Force Transfer Bank via Moota sandbox
+    if (kind === 'transfer') {
+      setSelectedGateway('moota');
+      setSelectedMethod('bank_transfer');
+      setShowMethodModal(false);
+      formRef.current?.requestSubmit();
+      return;
+    }
+    // Pick available gateway/method from config (prefer Xendit if enabled)
+    const xendit = gateways.find(g => g.name === 'xendit' && g.enabled);
     const mid = gateways.find(g => g.name === 'midtrans' && g.enabled);
-    if (!mid) { setShowMethodModal(false); formRef.current?.requestSubmit(); return; }
+
+    if (xendit) {
+      setSelectedGateway('xendit');
+      // Map kind to method code hints (stored as order.method)
+      if (kind === 'qris') setSelectedMethod('qris');
+      else if (kind === 'emoney') setSelectedMethod('emoney');
+      else if (kind === 'va' || kind === 'transfer') setSelectedMethod('va_bca');
+      setShowMethodModal(false);
+      formRef.current?.requestSubmit();
+      return;
+    }
+    // Fallback to Midtrans
+    if (!mid) {
+      // No midtrans available: for QRIS fallback to moota so we can show QR instructions
+      if (kind === 'qris') {
+        setSelectedGateway('moota');
+        setSelectedMethod('qris');
+      }
+      setShowMethodModal(false);
+      formRef.current?.requestSubmit();
+      return;
+    }
     const methods = Array.isArray(mid.methods) ? mid.methods : [];
     let methodCode = '';
     if (kind === 'qris' && methods.includes('qris')) methodCode = 'qris';
@@ -149,17 +181,18 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
       // Prefer GoPay, fallback to ShopeePay
       if (methods.includes('gopay')) methodCode = 'gopay';
       else if (methods.includes('shopeepay')) methodCode = 'shopeepay';
-    } else if (kind === 'va') {
+  } else if (kind === 'va') {
       // Auto-pick the first available VA method (Midtrans will handle specific bank UI)
       const firstVa = methods.find(m => m.startsWith('va_'));
       if (firstVa) methodCode = firstVa;
-    } else if (kind === 'transfer') {
-      // Prefer Permata VA if available, else first VA as generic transfer
-      methodCode = methods.includes('va_permata') ? 'va_permata' : (methods.find(m => m.startsWith('va_')) || '');
     }
     if (methodCode) {
       setSelectedGateway('midtrans');
       setSelectedMethod(methodCode);
+    } else if (kind === 'qris') {
+      // If user chose QRIS but Midtrans doesn't support it, fallback to moota QR flow
+      setSelectedGateway('moota');
+      setSelectedMethod('qris');
     }
     setShowMethodModal(false);
     // Submit the form; handleSubmit will use selectedGateway/selectedMethod
@@ -332,6 +365,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   const serverId = serverIdInput || "";
     const combinedUserId = serverId && code === "mlbb" ? `${inputUserId}(${serverId})` : inputUserId;
 
+  const chosenVariant = activeVariants[selectedIndex] || activeVariants[cheapestIndex] || null;
   const data: any = {
       code,
       userId: combinedUserId,
@@ -341,6 +375,10 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   price: (selectedPrice ?? 0) + (selectedGateway === 'midtrans' ? Number(methodFees[selectedMethod] || 0) : 0),
   // Pass through fee breakdown for storage/analysis
   gatewayFee: selectedGateway === 'midtrans' ? Number(methodFees[selectedMethod] || 0) : 0,
+      productCode: code,
+      productLabel: code,
+      variantLabel: chosenVariant?.label || null,
+      variantPrice: typeof chosenVariant?.price === 'number' ? chosenVariant?.price : price,
     };
   if (selectedGateway) data.gateway = selectedGateway;
   if (selectedMethod) data.method = selectedMethod;
@@ -357,8 +395,16 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
     if (result.snapRedirectUrl) setSnapUrl(result.snapRedirectUrl);
     if (result.midtransClientKey) setMidtransClientKey(result.midtransClientKey);
 
+    // Always route user to our instruction page to complete payment
+    if (result?.orderId) {
+  const chosen = lastChosenKindRef.current;
+  const q = chosen ? `?m=${encodeURIComponent(chosen)}` : '';
+      window.location.href = `/payment-instructions/${encodeURIComponent(result.orderId)}${q}`;
+      return;
+    }
+
     // Midtrans Snap popup integration (preferred over redirect)
-    if (result.snapToken && selectedGateway === "midtrans") {
+  if (false && result.snapToken && selectedGateway === "midtrans") {
       const redirectUrl: string = result.snapRedirectUrl || "";
       const isSandbox = redirectUrl.includes("app.sandbox.midtrans.com");
       try {
@@ -468,20 +514,22 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     {v.icon ? (
-                      <img src={v.icon} alt="" className="w-7 h-7 object-contain" />
+                      <img src={v.icon} alt="" className="w-9 h-9 object-contain" />
                     ) : null}
                     <div>
-                      <div className="text-[15px] font-semibold text-slate-900">{v.label}</div>
-                      {(v.price != null || v.compareAt != null) && (
-                        <div className="text-xs text-slate-600 mt-0.5 flex items-center gap-2">
-                          {v.compareAt != null && (
-                            <span className="line-through text-red-500 text-[12px] italic">Rp {Number(v.compareAt).toLocaleString()}</span>
-                          )}
-                          {v.price != null && (
-                            <span className="text-blue-600 font-bold text-[14px]">Rp {Number(v.price).toLocaleString()}</span>
-                          )}
-                        </div>
-                      )}
+                      <div className="text-[15px] font-semibold text-slate-900 leading-tight mb-0">{v.label}</div>
+                      <div className="text-xs text-slate-600 mt-0 flex flex-col items-start gap-0">
+                        {/* Harga coret di atas harga regular */}
+                        {v.compareAt != null && v.price != null && v.compareAt > v.price ? (
+                          <span className="line-through text-red-500 text-[11px] italic">Rp {Number(v.compareAt).toLocaleString()}</span>
+                        ) : null}
+                        {v.compareAt == null && v.price != null && v.price > 0 ? (
+                          <span className="line-through text-red-500 text-[11px] italic">Rp {(Number(v.price) * 1.15).toLocaleString()}</span>
+                        ) : null}
+                        {v.price != null && (
+                          <span className="text-blue-600 font-bold text-[14px]">Rp {Number(v.price).toLocaleString()}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <span className="text-xs font-medium text-blue-700">Ubah ▾</span>
@@ -519,20 +567,22 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                         >
                           <div className="flex items-center gap-3">
                             {v.icon ? (
-                              <img src={v.icon} alt="" className="w-7 h-7 object-contain" />
+                              <img src={v.icon} alt="" className="w-9 h-9 object-contain" />
                             ) : null}
                             <div>
-                              <div className="text-[15px] font-semibold text-slate-900">{v.label}</div>
-                              {(v.price != null || v.compareAt != null) && (
-                                <div className="text-xs text-slate-600 mt-0.5 flex items-center gap-2">
-                                  {v.compareAt != null && (
-                                    <span className="line-through text-red-500 text-[12px] italic">Rp {Number(v.compareAt).toLocaleString()}</span>
-                                  )}
-                                  {v.price != null && (
-                                    <span className="text-blue-600 font-bold text-[14px]">Rp {Number(v.price).toLocaleString()}</span>
-                                  )}
-                                </div>
-                              )}
+                              <div className="text-[15px] font-semibold text-slate-900 leading-tight mb-0">{v.label}</div>
+                              <div className="text-xs text-slate-600 mt-0 flex flex-col items-start gap-0">
+                                {/* Harga coret di atas harga regular */}
+                                {v.compareAt != null && v.price != null && v.compareAt > v.price ? (
+                                  <span className="line-through text-red-500 text-[12px] italic">Rp {Number(v.compareAt).toLocaleString()}</span>
+                                ) : null}
+                                {v.compareAt == null && v.price != null && v.price > 0 ? (
+                                  <span className="line-through text-red-500 text-[12px] italic">Rp {(Number(v.price) * 1.15).toLocaleString()}</span>
+                                ) : null}
+                                {v.price != null && (
+                                  <span className="text-blue-600 font-bold text-[14px]">Rp {Number(v.price).toLocaleString()}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </button>

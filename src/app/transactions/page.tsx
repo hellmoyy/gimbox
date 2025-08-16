@@ -29,51 +29,20 @@ export default function TransactionsPage() {
   const [items, setItems] = useState<DummyTxn[]>([]);
   const [hasAny, setHasAny] = useState<boolean>(false);
   const renderStatusLabel = (s: DummyTxn["status"]) => (s === "Pending" ? "Menunggu\nPembayaran" : s);
-  async function continuePayment(orderId: string) {
-    try {
-      const res = await fetch(`/api/transactions/pay?orderId=${encodeURIComponent(orderId)}`, { cache: "no-store" });
-      const j = await res.json();
-      if (!res.ok || !j?.success) {
-        // fallback: show modal details already openable via invoice
-        return;
-      }
-      const snapToken: string = j.snapToken || "";
-      const redirectUrl: string = j.snapRedirectUrl || "";
-      const clientKey: string = j.midtransClientKey || "";
-      if (!snapToken && redirectUrl) {
-        window.location.href = redirectUrl;
-        return;
-      }
-      if (snapToken) {
-        const isSandbox = redirectUrl.includes("app.sandbox.midtrans.com");
-        // Ensure snap script present
-        const scriptId = "midtrans-snap-script";
-        if (!(window as any).snap && !document.getElementById(scriptId)) {
-          await new Promise<void>((resolve, reject) => {
-            const s = document.createElement("script");
-            s.id = scriptId;
-            s.src = isSandbox ? "https://app.sandbox.midtrans.com/snap/snap.js" : "https://app.midtrans.com/snap/snap.js";
-            if (clientKey) s.setAttribute("data-client-key", clientKey);
-            s.onload = () => resolve();
-            s.onerror = () => reject(new Error("Failed to load Midtrans Snap"));
-            document.body.appendChild(s);
-          });
-        }
-        const snap: any = (window as any).snap;
-        if (snap && typeof snap.pay === "function") {
-          snap.pay(snapToken, {
-            onSuccess: () => {},
-            onPending: () => {},
-            onError: () => {},
-            onClose: () => {},
-          });
-          return;
-        }
-      }
-      if (redirectUrl) {
-        window.location.href = redirectUrl;
-      }
-    } catch {}
+  function normalizeMethod(method?: string): 'qris' | 'emoney' | 'va' | 'transfer' | '' {
+    const m = String(method || '').toLowerCase();
+    if (m.includes('qris') || /\bqr\b/.test(m)) return 'qris';
+    if (m.includes('bank') && m.includes('transfer')) return 'transfer';
+    if (m.includes('va') || m.includes('virtual account') || m.includes('virtual_account') || m.includes('permata')) return 'va';
+    if (m.includes('gopay') || m.includes('shopee') || m.includes('ovo') || m.includes('dana') || m.includes('emoney') || m.includes('e-money')) return 'emoney';
+    return '';
+  }
+  function continuePayment(orderId: string) {
+    const t: any = items.find(it => it.id === orderId);
+    // Prefer raw method exactly as stored on order (intent from checkout)
+    const intent = normalizeMethod(t?.methodRaw || t?.method);
+    const q = intent ? `?m=${encodeURIComponent(intent)}` : '';
+    window.location.href = `/payment-instructions/${encodeURIComponent(orderId)}${q}`;
   }
   const filtered = useMemo(() => {
     if (!active) return items;
@@ -181,16 +150,16 @@ export default function TransactionsPage() {
             <table className="w-full text-sm text-slate-800">
               <thead>
                 <tr className="bg-slate-100 text-slate-700">
-                  <th className="px-4 py-3 text-left">Invoice</th>
-                  <th className="px-4 py-3 text-left">Produk</th>
-                  <th className="px-4 py-3 text-right">Jumlah</th>
-                  <th className="px-4 py-3 text-left">Status</th>
+                  <th className="px-2 py-3 text-left">Invoice</th>
+                  <th className="px-2 py-3 text-left">Produk</th>
+                  <th className="px-2 py-3 text-right">Jumlah</th>
+                  <th className="px-2 py-3 text-left">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {pageItems.map((t) => (
                   <tr key={t.id} className="border-t border-slate-100 odd:bg-white even:bg-slate-50">
-          <td className="px-4 py-3 whitespace-nowrap">
+          <td className="px-2 py-3 whitespace-nowrap">
                       <button
                         type="button"
                         title="Lihat detail transaksi"
@@ -200,9 +169,9 @@ export default function TransactionsPage() {
                         {t.id}
                       </button>
                     </td>
-                    <td className="px-4 py-3 text-slate-800">{t.product}</td>
-                    <td className="px-4 py-3 text-right text-slate-900">{formatRupiah(t.amount)}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-3 text-slate-800">{t.product}</td>
+                    <td className="px-2 py-3 text-right text-slate-900">{formatRupiah(t.amount)}</td>
+                    <td className="px-2 py-3">
                       {t.status === "Pending" ? (
                         <button
                           type="button"

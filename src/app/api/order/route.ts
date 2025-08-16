@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import axios from "axios";
 import { getDb } from "../../../lib/mongodb";
+import { getXenditConfig, createQris as xenditCreateQris, createVaBca as xenditCreateVaBca } from "@/lib/providers/xendit";
+import { listBankAccounts as mootaListBankAccounts } from "@/lib/providers/moota";
 
 const DIGIFLAZZ_URL = "https://api.digiflazz.com/v1/transaction";
 const API_KEY = process.env.DIGIFLAZZ_API_KEY;
@@ -27,7 +29,12 @@ function getSignature(
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { code, userId, email, nominal, price } = body;
+  const productCode: string | undefined = body?.productCode;
+  const productLabel: string | undefined = body?.productLabel;
+  const variantLabel: string | null | undefined = body?.variantLabel;
+  const variantPrice: number | null | undefined = body?.variantPrice;
   const gateway: string = (body?.gateway || "midtrans").toLowerCase();
+  const method: string = String(body?.method || "");
   // Optional extra fields for richer transaction tracking
   const provider: string = body?.provider || "digiflazz"; // default current flow
   const buyPrice: number | null = typeof body?.buyPrice === "number" ? body.buyPrice : null;
@@ -48,7 +55,104 @@ export async function POST(req: NextRequest) {
   // const digiflazzRes = await axios.post(DIGIFLAZZ_URL, digiflazzPayload);
   // if (!digiflazzRes.data.success) return Response.json({ success: false, message: digiflazzRes.data.message });
 
-  // 2. Buat transaksi ke gateway terpilih (saat ini: Midtrans)
+  // 2. Buat transaksi ke gateway terpilih
+  // Branch A: Custom/Moota (manual instructions)
+  if (gateway === "moota") {
+    const db = await getDb();
+    const orderId = digiflazzPayload.order_id;
+    try {
+      // Try fetching bank account info from Moota (prefer BCA)
+      let details: any = {};
+      try {
+        const resp: any = await mootaListBankAccounts();
+        const list: any[] = Array.isArray(resp?.data) ? resp.data : (Array.isArray(resp) ? resp : []);
+        const pick = list.find((b: any) => String(b?.bank || b?.bank_type || "").toUpperCase().includes("BCA")) || list[0];
+        if (pick) {
+          details = {
+            bankName: String(pick.bank || pick.bank_type || "BCA").toUpperCase(),
+            accountNumber: String(pick.number || pick.account_number || pick.accountNumber || ""),
+            accountHolder: String(pick.name || pick.account_name || pick.accountName || ""),
+            moota: { id: pick.id || pick._id || null },
+          };
+        }
+      } catch {}
+
+      await db.collection("orders").insertOne({
+        orderId,
+        provider,
+        paymentGateway: gateway,
+        method,
+        code,
+  productCode: productCode || code,
+  productLabel: productLabel || code,
+  variantLabel: variantLabel || null,
+  variantPrice: typeof variantPrice === 'number' ? variantPrice : price,
+        userId,
+        email,
+        nominal,
+        sellPrice: price,
+        buyPrice,
+        fees: { admin: adminFee, gateway: gatewayFee, other: otherFee, total: Number(adminFee + gatewayFee + otherFee) },
+        details,
+        status: "pending",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    } catch (e: any) {
+      return Response.json({ success: false, message: "Gagal menyimpan order", error: e?.message || "db" }, { status: 500 });
+    }
+    return Response.json({ success: true, message: "Order dibuat. Lanjutkan pembayaran.", orderId });
+  }
+
+  // Branch B: Xendit (placeholder storage; integrate invoice/charges later)
+  if (gateway === "xendit") {
+    const db = await getDb();
+    const orderId = digiflazzPayload.order_id;
+    try {
+      // Create charge based on method hint
+      let details: any = {};
+      try {
+        const cfg = await getXenditConfig();
+        if (!cfg.enabled) throw new Error("Xendit disabled");
+        if (String(method).toLowerCase().includes("qris")) {
+          const q = await xenditCreateQris({ referenceId: orderId, amount: price || 0 });
+          details = { qrCodeUrl: q?.qr_string ? `https://api.qrserver.com/v1/create-qr-code/?size=184x184&data=${encodeURIComponent(q.qr_string)}` : undefined, xendit: { qrisId: q?.id, qrString: q?.qr_string } };
+        } else {
+          // Default to VA BCA
+          const v = await xenditCreateVaBca({ externalId: orderId, name: email || "Customer", expectedAmount: price || undefined });
+          details = { bankName: "BCA", accountNumber: v?.account_number, accountHolder: email || "Customer", xendit: { vaId: v?.id } };
+        }
+      } catch {
+        // Keep details empty if Xendit call fails; UI will fallback to dummy/instructions
+      }
+      await db.collection("orders").insertOne({
+        orderId,
+        provider,
+        paymentGateway: gateway,
+        method,
+        code,
+        productCode: productCode || code,
+        productLabel: productLabel || code,
+        variantLabel: variantLabel || null,
+        variantPrice: typeof variantPrice === 'number' ? variantPrice : price,
+        userId,
+        email,
+        nominal,
+        sellPrice: price,
+        buyPrice,
+        fees: { admin: adminFee, gateway: gatewayFee, other: otherFee, total: Number(adminFee + gatewayFee + otherFee) },
+        details,
+        status: "pending",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    } catch (e: any) {
+      return Response.json({ success: false, message: "Gagal menyimpan order Xendit", error: e?.message || "db" }, { status: 500 });
+    }
+    return Response.json({ success: true, message: "Order dibuat. Lanjutkan pembayaran.", orderId });
+  }
+
+  // Branch C: Midtrans
   if (gateway !== "midtrans") {
     return Response.json({ success: false, message: `Gateway ${gateway} belum didukung` }, { status: 400 });
   }
@@ -109,20 +213,25 @@ export async function POST(req: NextRequest) {
   try {
     await db.collection("orders").insertOne({
       orderId: digiflazzPayload.order_id,
-  provider,
+      provider,
       paymentGateway: gateway,
+      method,
       code,
+  productCode: productCode || code,
+  productLabel: productLabel || code,
+  variantLabel: variantLabel || null,
+  variantPrice: typeof variantPrice === 'number' ? variantPrice : price,
       userId,
       email,
       nominal,
-  sellPrice: price,
-  buyPrice,
-  fees: { admin: adminFee, gateway: gatewayFee, other: otherFee, total: Number(adminFee + gatewayFee + otherFee) },
+      sellPrice: price,
+      buyPrice,
+      fees: { admin: adminFee, gateway: gatewayFee, other: otherFee, total: Number(adminFee + gatewayFee + otherFee) },
       snapToken,
       snapRedirectUrl,
       status: "pending",
       createdAt: new Date(),
-  updatedAt: new Date(),
+      updatedAt: new Date(),
     });
   } catch (e: any) {
     console.error("[order] failed to insert order:", e.message);
@@ -131,9 +240,10 @@ export async function POST(req: NextRequest) {
   return Response.json({
     success: true,
     message: "Order berhasil dibuat, lanjutkan pembayaran.",
-  snapToken,
-  snapRedirectUrl,
-  midtransClientKey: clientKey || undefined,
-  data: { code, userId, email, nominal, price },
+    orderId: digiflazzPayload.order_id,
+    snapToken,
+    snapRedirectUrl,
+    midtransClientKey: clientKey || undefined,
+    data: { code, userId, email, nominal, price },
   });
 }
