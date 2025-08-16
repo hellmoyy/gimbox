@@ -1,8 +1,9 @@
 import { NextRequest } from "next/server";
 import { getDb } from "../../../../../lib/mongodb";
 
-export async function GET(_req: NextRequest, { params }: { params: { gateway: string } }) {
-  const gw = (params.gateway || "").toLowerCase();
+export async function GET(_req: NextRequest, ctx: { params: Promise<{ gateway: string }> }) {
+  const { gateway } = await ctx.params;
+  const gw = (gateway || "").toLowerCase();
   try {
     const db = await getDb();
     const doc = await db.collection("settings").findOne({ key: `gateway:${gw}` });
@@ -12,8 +13,9 @@ export async function GET(_req: NextRequest, { params }: { params: { gateway: st
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: { gateway: string } }) {
-  const gw = (params.gateway || "").toLowerCase();
+export async function POST(req: NextRequest, ctx: { params: Promise<{ gateway: string }> }) {
+  const { gateway } = await ctx.params;
+  const gw = (gateway || "").toLowerCase();
   let body: any = {};
   try { body = await req.json(); } catch {}
   // expected body: { enabled: boolean, keys: object, methods: string[] }
