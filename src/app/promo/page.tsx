@@ -16,17 +16,17 @@ export default async function PromoPage() {
   }
   return (
     <main className="min-h-screen pb-24">
-      <div className="mx-auto max-w-6xl px-4 mt-6">
+  <div className="mx-auto w-full max-w-md md:max-w-6xl px-4 mt-6">
         <h1 className="text-xl font-semibold text-slate-900 mb-3">Promo</h1>
         {promos.length === 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white/90 p-6 text-center text-slate-600">
             Belum ada promo aktif saat ini.
           </div>
         ) : (
-          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <ul className="grid grid-cols-1 gap-3">
             {promos.map((p: any) => (
-              <li key={p._id} className="rounded-xl overflow-hidden border border-slate-100 bg-white/90 shadow-sm">
-                <div className="relative h-36 sm:h-44">
+              <li key={p._id} className="rounded-2xl overflow-hidden border border-slate-100 bg-white/90 shadow-sm">
+                <div className="relative h-36 sm:h-40 md:h-36 lg:h-40">
                   <div
                     className={`absolute inset-0 ${p.image ? "" : "bg-slate-200"}`}
                     style={

@@ -42,10 +42,10 @@ export default function RootLayout({
   <body className={`${geistSans.variable} ${geistMono.variable} ${rajdhani.variable} antialiased`}>
     <meta name="theme-color" content="#0d6efd" />
         <AuthProvider>
-          {/* Header hidden on admin via HeaderGate */}
-          <HeaderGate />
           {/* RootShell renders PWA container for public, desktop for /admin */}
           <RootShell>
+            {/* Header hidden on admin via HeaderGate */}
+            <HeaderGate />
             {children}
           </RootShell>
         </AuthProvider>

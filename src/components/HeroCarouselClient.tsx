@@ -18,7 +18,7 @@ export default function HeroCarouselClient({ slides }: { slides: HeroSlide[] }) 
   const current = slides?.[i] || { title: "", subtitle: "", color: "from-slate-400 to-slate-600" };
 
   return (
-    <div className="mx-auto max-w-6xl px-4 mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+  <div className="mx-auto w-full max-w-md px-4 mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
       <div className="md:col-span-2">
         <div className={`rounded-2xl shadow overflow-hidden bg-gradient-to-r ${current.color || "from-slate-400 to-slate-600"} text-white p-8 min-h-[160px] flex flex-col justify-center`}>
           <h2 className="text-2xl font-bold">{current.title}</h2>

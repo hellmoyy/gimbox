@@ -8,7 +8,16 @@ const nav = [
   { href: "/admin/banners", label: "Banner", icon: "🖼️" },
   { href: "/admin/promos", label: "Promo", icon: "🏷️" },
   { href: "/admin/categories", label: "Kategori", icon: "🗂️" },
+  { href: "/admin/transactions", label: "Transaksi", icon: "📑" },
   { href: "/admin/settings", label: "Pengaturan", icon: "⚙️" },
+  { href: "/admin/provider", label: "Provider", icon: "🔌" },
+  { href: "/admin/provider/vcgamers", label: "— Vcgamers", icon: "  " },
+  { href: "/admin/provider/digiflazz", label: "— Digiflazz", icon: "  " },
+  { href: "/admin/provider/iak", label: "— IAK", icon: "  " },
+  { href: "/admin/payment-gateway", label: "Payment Gateway", icon: "💳" },
+  { href: "/admin/payment-gateway/xendit", label: "— Xendit", icon: "  " },
+  { href: "/admin/payment-gateway/midtrans", label: "— Midtrans", icon: "  " },
+  { href: "/admin/payment-gateway/moota", label: "— Moota", icon: "  " },
 ];
 
 export default function AdminSidebar() {

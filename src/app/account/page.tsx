@@ -6,17 +6,71 @@ export default function AccountPage() {
   const loading = status === "loading";
   return (
     <main className="min-h-screen pb-24">
-      <div className="mx-auto max-w-6xl px-4 mt-6">
-  <div className="p-6 text-center text-slate-700 flex flex-col items-center justify-center min-h-[60vh]">
+      <div className="mx-auto w-full max-w-md md:max-w-6xl px-4 mt-6">
+        <div className="p-6 text-slate-700 flex flex-col items-center justify-center min-h-[60vh]">
           {loading ? (
             <div>Memuat…</div>
           ) : session ? (
-            <div>
-              <div className="text-sm mb-2">Masuk sebagai</div>
-              <div className="font-semibold">{session.user?.name}</div>
-              <div className="text-xs text-slate-500">{session.user?.email}</div>
-              <div className="mt-4">
-                <button onClick={() => signOut()} className="inline-block bg-slate-800 text-white text-sm font-semibold px-4 py-2 rounded-lg">Keluar</button>
+            <div className="w-full max-w-sm">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 text-center">
+                <img src={session.user?.image || "/images/logo-gimbox.png"} alt="Avatar" className="mx-auto w-16 h-16 rounded-full object-cover ring-2 ring-white shadow" />
+                <div className="mt-3 text-lg font-semibold text-slate-900">{session.user?.name || "Pengguna"}</div>
+                <div className="text-xs text-slate-500">{session.user?.email}</div>
+                <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-medium">Google</div>
+
+                <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                  <a href="/transactions" className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-slate-700">Transaksi</a>
+                  <a href="/promo" className="rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-slate-700">Promo</a>
+                </div>
+
+                <div className="mt-4">
+                  <button onClick={() => signOut()} className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-lg">
+                    Keluar
+                  </button>
+                </div>
+              </div>
+
+              {/* Menus */}
+              <div className="mt-6">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 px-2 mb-2">Social</div>
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                  <a href="https://discord.gg/" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 border-b border-slate-100">
+                    <span className="text-sm text-slate-700">Join Discord</span>
+                    <svg className="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"/></svg>
+                  </a>
+                  <a href="https://t.me/" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+                    <span className="text-sm text-slate-700">Join Telegram</span>
+                    <svg className="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"/></svg>
+                  </a>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 px-2 mb-2">Support</div>
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                  <a href="/support/customer-service" className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 border-b border-slate-100">
+                    <span className="text-sm text-slate-700">Customer Service</span>
+                    <svg className="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"/></svg>
+                  </a>
+                  <a href="/support/ticket" className="flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+                    <span className="text-sm text-slate-700">Open Ticket</span>
+                    <svg className="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"/></svg>
+                  </a>
+                </div>
+              </div>
+
+              <div className="mt-6 mb-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 px-2 mb-2">Others</div>
+                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                  <a href="/privacy" className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 border-b border-slate-100">
+                    <span className="text-sm text-slate-700">Privacy Policy</span>
+                    <svg className="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"/></svg>
+                  </a>
+                  <a href="/terms" className="flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+                    <span className="text-sm text-slate-700">Term & Condition</span>
+                    <svg className="w-4 h-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"/></svg>
+                  </a>
+                </div>
               </div>
             </div>
           ) : (
@@ -36,6 +90,10 @@ export default function AccountPage() {
               </button>
             </div>
           )}
+        </div>
+        <div className="mt-6 mb-10 text-center text-[11px] leading-5 text-slate-500">
+          <div>PT Gimbox Digital Indonesia</div>
+          <div>© 2025 GIMBOX.ID . All rights reserved.</div>
         </div>
       </div>
     </main>

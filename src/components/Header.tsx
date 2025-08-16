@@ -92,7 +92,7 @@ export default function Header() {
   return (
   <header className="sticky top-0 z-40 w-full bg-[#fefefe] text-slate-800 border-b border-slate-200">
       <div className="bg-[#fefefe] text-slate-800">
-        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-4">
+  <div className="mx-auto w-full max-w-md px-4 py-3 flex items-center gap-4">
           <Link href="/" className="flex items-center">
             <img src="/images/logo-gimbox.png" alt="Logo" className="h-[28px] w-auto" />
           </Link>

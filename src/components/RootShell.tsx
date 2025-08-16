@@ -13,8 +13,8 @@ export default function RootShell({ children }: { children: React.ReactNode }) {
 
   // Public app shell with mobile-centered container and bottom nav
   return (
-    <div className="min-h-screen flex flex-col items-center">
-      <div className="w-full max-w-md flex-1 flex flex-col md:rounded-2xl/3 backdrop-blur-sm bg-white/80 ring-1 ring-slate-200/60 shadow-sm">
+    <div className="min-h-screen flex flex-col items-center bg-black">
+      <div className="w-full max-w-md flex-1 flex flex-col md:rounded-2xl/3 bg-[#f7f7f7]">
         {children}
       </div>
       <BottomNavGate />

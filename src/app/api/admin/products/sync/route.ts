@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getDb } from "../../../../../lib/mongodb";
 import crypto from "crypto";
+import { getPriceList as fetchVCGPriceList } from "../../../../../lib/providers/vcgamers";
 
 // Provider helpers (skeletons)
 async function fetchDigiflazzPriceList(username: string, apiKey: string) {
@@ -31,6 +32,8 @@ export async function POST(req: NextRequest) {
     list = await fetchDigiflazzPriceList(s?.digiflazz_username || process.env.DIGIFLAZZ_USERNAME || "", s?.digiflazz_api_key || process.env.DIGIFLAZZ_API_KEY || "");
   } else if (provider === "iak") {
     list = await fetchIAKPriceList(s?.iak_username || process.env.IAK_USERNAME || "", s?.iak_api_key || process.env.IAK_API_KEY || "", s?.iak_secret || process.env.IAK_SECRET || "");
+  } else if (provider === "vcgamers") {
+    list = await fetchVCGPriceList();
   }
 
   try {

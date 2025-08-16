@@ -25,6 +25,10 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
   const [validation, setValidation] = useState<{ ok: boolean; text: string } | null>(null);
   const [message, setMessage] = useState("");
   const [snapToken, setSnapToken] = useState("");
+  const [snapUrl, setSnapUrl] = useState("");
+  const [gateways, setGateways] = useState<Array<{ name: string; enabled: boolean; methods: string[] }>>([]);
+  const [selectedGateway, setSelectedGateway] = useState<string>("midtrans");
+  const [selectedMethod, setSelectedMethod] = useState<string>("");
 
   const activeVariantsAll = useMemo(() => (variants || []).filter(v => (v.isActive ?? true) !== false), [variants]);
   const activeVariants = useMemo(() => {
@@ -80,6 +84,22 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
   const { data: session } = useSession();
   const sessionEmail = (session as any)?.user?.email as string | undefined;
   const [showLogin, setShowLogin] = useState(false);
+  // Load available gateways for user selection
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/gateways/available', { cache: 'no-store' });
+        const j = await res.json();
+        const list: Array<{ name: string; enabled: boolean; methods: string[] }> = Array.isArray(j?.data) ? j.data : [];
+        const enabledList = list.filter((g) => g.enabled);
+        setGateways(enabledList);
+        if (enabledList.length) {
+          setSelectedGateway(enabledList[0].name);
+          setSelectedMethod(enabledList[0].methods?.[0] || "");
+        }
+      } catch {}
+    })();
+  }, []);
 
   // Auto-check helpers: debounce, abort, cache, throttle (2s between successes)
   const debounceRef = useMemo(() => ({ t: 0 as any }), []);
@@ -226,13 +246,15 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
   const serverId = serverIdInput || "";
     const combinedUserId = serverId && code === "mlbb" ? `${inputUserId}(${serverId})` : inputUserId;
 
-    const data = {
+  const data: any = {
       code,
       userId: combinedUserId,
       email: sessionEmail,
       nominal: form.nominal.value,
       price: selectedPrice ?? 0,
     };
+  if (selectedGateway) data.gateway = selectedGateway;
+  if (selectedMethod) data.method = selectedMethod;
 
     const res = await fetch("/api/order", {
       method: "POST",
@@ -243,6 +265,11 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
     setLoading(false);
     setMessage(result.message || "");
     if (result.snapToken) setSnapToken(result.snapToken);
+    if (result.snapRedirectUrl) setSnapUrl(result.snapRedirectUrl);
+    if (result.snapRedirectUrl) {
+      // Prefer full-page redirect for better compatibility
+      window.location.href = result.snapRedirectUrl;
+    }
   }
 
   return (
@@ -259,7 +286,6 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
               className="mt-1 w-full border border-slate-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-600"
               required
               inputMode="numeric"
-              pattern="\\d*"
               maxLength={12}
               value={userIdInput}
               onChange={(e) => {
@@ -284,7 +310,6 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
               className="mt-1 w-full border border-slate-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-600"
               required
               inputMode="numeric"
-              pattern="\\d*"
               maxLength={5}
               value={serverIdInput}
               onChange={(e) => {
@@ -418,6 +443,46 @@ export default function TopupForm({ code, price, variants }: { code: string; pri
             <option value="50">50 Diamonds</option>
             <option value="100">100 Diamonds</option>
           </select>
+        </div>
+      )}
+
+      {/* Payment method selection */}
+      {gateways.length > 0 && (
+        <div className="rounded-lg border p-3">
+          <div className="text-sm font-medium text-slate-700 mb-1">Metode Pembayaran</div>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-3 text-sm">
+              {gateways.map((g) => (
+                <label key={g.name} className="inline-flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="gateway"
+                    checked={selectedGateway === g.name}
+                    onChange={() => {
+                      setSelectedGateway(g.name);
+                      setSelectedMethod(g.methods?.[0] || "");
+                    }}
+                  />
+                  <span className="capitalize">{g.name}</span>
+                </label>
+              ))}
+            </div>
+            {gateways.find((g) => g.name === selectedGateway)?.methods?.length ? (
+              <div className="text-xs text-slate-600">
+                <div className="mb-1">Opsi:</div>
+                <div className="flex flex-wrap gap-3">
+                  {gateways
+                    .find((g) => g.name === selectedGateway)!
+                    .methods.map((m) => (
+                      <label key={m} className="inline-flex items-center gap-2">
+                        <input type="radio" name="method" checked={selectedMethod === m} onChange={() => setSelectedMethod(m)} />
+                        <span>{m}</span>
+                      </label>
+                    ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
 
