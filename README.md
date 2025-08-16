@@ -1,3 +1,28 @@
+# Topup Game Website
+
+Website topup game seperti topmur.com menggunakan Next.js, Tailwind CSS, Digiflazz API, dan Midtrans sandbox.
+
+## Fitur
+- Daftar produk game (dari Digiflazz)
+- Form topup & checkout
+- Pembayaran via Midtrans sandbox
+
+## Konfigurasi
+1. Copy `.env.example` ke `.env.local` dan isi dengan kredensial Digiflazz & Midtrans Anda.
+2. Jalankan `npm install` jika belum.
+3. Jalankan `npm run dev` untuk development.
+
+## Integrasi
+- [Digiflazz API](https://developer.digiflazz.com/api/seller/persiapan/)
+- [Midtrans Sandbox](https://docs.midtrans.com/docs/sandbox)
+
+## Struktur
+- Next.js (TypeScript, App Router)
+- Tailwind CSS
+
+## Catatan
+- Gambar produk menggunakan placeholder, ganti dengan gambar asli sesuai kebutuhan.
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
