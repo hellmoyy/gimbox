@@ -39,16 +39,7 @@ export default function RootLayout({
 }>) {
   return (
   <html lang="id">
-    <body
-        className={`${geistSans.variable} ${geistMono.variable} ${rajdhani.variable} antialiased`}
-        style={{
-          backgroundImage: "url(/images/bgbg.webp)",
-          backgroundRepeat: "no-repeat",
-          backgroundSize: "cover",
-          backgroundAttachment: "fixed",
-      backgroundPosition: "center",
-        }}
-      >
+  <body className={`${geistSans.variable} ${geistMono.variable} ${rajdhani.variable} antialiased`}>
     <meta name="theme-color" content="#0d6efd" />
         <AuthProvider>
           {/* Header hidden on admin via HeaderGate */}
