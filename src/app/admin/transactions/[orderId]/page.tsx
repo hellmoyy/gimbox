@@ -3,11 +3,12 @@ import TransactionEditor from "../../../../components/admin/TransactionEditor";
 
 export const dynamic = "force-dynamic";
 
-export default async function TransactionDetail({ params }: { params: { orderId: string } }) {
+export default async function TransactionDetail({ params }: { params: Promise<{ orderId: string }> }) {
+  const { orderId } = await params;
   let row: any = null;
   try {
     const db = await getDb();
-    row = await db.collection("orders").findOne({ orderId: params.orderId });
+    row = await db.collection("orders").findOne({ orderId });
   } catch {}
 
   if (!row) return <div>Transaksi tidak ditemukan.</div>;
