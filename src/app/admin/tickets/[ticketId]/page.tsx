@@ -7,7 +7,8 @@ async function getTicket(ticketId: string) {
   return res.json();
 }
 
-export default async function AdminTicketDetailPage({ params }: { params: { ticketId: string } }) {
+export default async function AdminTicketDetailPage({ params }: { params: Promise<{ ticketId: string }> }) {
+  const { ticketId } = await params;
   const cookieStore = await cookies();
   const cookie = cookieStore.get("admin_session")?.value;
   const guard = (typeof CFG_AUTH === "string" && CFG_AUTH.length ? CFG_AUTH : undefined) || process.env.AUTH_SECRET || "dev";
@@ -15,7 +16,7 @@ export default async function AdminTicketDetailPage({ params }: { params: { tick
     return <div>Unauthorized</div> as any;
   }
 
-  const j = await getTicket(params.ticketId);
+  const j = await getTicket(ticketId);
   const ticket = j?.ticket;
   if (!ticket) return <div className="p-4">Not found</div> as any;
 

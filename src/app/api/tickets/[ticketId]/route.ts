@@ -18,15 +18,16 @@ type TicketDoc = {
   messages: TicketMessage[];
 };
 
-export async function GET(req: NextRequest, { params }: { params: { ticketId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ ticketId: string }> }) {
   try {
     const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || "";
     const token = await getToken({ req, secret });
     if (!token || !token.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const email = String(token.email).toLowerCase();
+  const { ticketId } = await params;
   const db = await getDb();
   const tickets = db.collection<TicketDoc>("tickets");
-  const row = await tickets.findOne({ ticketId: params.ticketId, email }, { projection: { _id: 0 } });
+  const row = await tickets.findOne({ ticketId, email }, { projection: { _id: 0 } });
     if (!row) return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
     return NextResponse.json({ success: true, ticket: row });
   } catch (e: any) {
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: { ticketId: st
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: { ticketId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ ticketId: string }> }) {
   try {
     const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || "";
     const token = await getToken({ req, secret });
@@ -50,7 +51,8 @@ export async function POST(req: NextRequest, { params }: { params: { ticketId: s
       $push: { messages: { author: "user", email, text: message, createdAt: now } },
       $set: { updatedAt: now, status: "open" },
     };
-    const res = await tickets.updateOne({ ticketId: params.ticketId, email }, update);
+    const { ticketId } = await params;
+    const res = await tickets.updateOne({ ticketId, email }, update);
     if (!res.matchedCount) return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (e: any) {
