@@ -6,6 +6,7 @@ export default function AccountPage() {
   const { data: session, status } = useSession();
   const loading = status === "loading";
   const [gimCash, setGimCash] = useState<number | null>(null);
+  const [points, setPoints] = useState<number>(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
   const [topupOpen, setTopupOpen] = useState(false);
@@ -127,7 +128,7 @@ export default function AccountPage() {
                         </p>
                       </div>
                       <div className="flex flex-col items-end">
-                        <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/15 ring-1 ring-white/30">Member</span>
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/15 ring-1 ring-white/30">Point: {new Intl.NumberFormat('id-ID').format(points)}</span>
                       </div>
                     </div>
                   </div>
