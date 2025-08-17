@@ -245,7 +245,16 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
               <img src={icon} alt="metode" className="w-8 h-8 object-contain" />
               <div className="text-sm">
                 <div className="font-semibold text-slate-900">Metode: <span className="text-[#0d6efd]">{methodLabel}</span></div>
-                <div className="text-xs text-slate-500">Jumlah: <span className="font-semibold text-slate-900">{formatRupiah(payment.amount)}</span></div>
+                <div className="text-xs text-slate-500">
+                  Jumlah: {methodNorm === 'bank_transfer' ? (
+                    <>
+                      <span className="font-semibold text-slate-900">{formatRupiah(amountWithCode)}</span>
+                      <span className="ml-1 text-[11px] text-slate-500">(kode unik {String(code).padStart(3, '0')})</span>
+                    </>
+                  ) : (
+                    <span className="font-semibold text-slate-900">{formatRupiah(payment.amount)}</span>
+                  )}
+                </div>
               </div>
             </div>
             {isPending && (

@@ -209,7 +209,7 @@ export default function TransactionsPage() {
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
                   className={
-                    "px-3 py-1.5 rounded border text-sm transition " +
+                    "px-3 py-1.5 rounded-full border text-sm transition " +
                     (page === 1
                       ? "bg-white text-slate-400 border-slate-200 cursor-not-allowed"
                       : "bg-white text-slate-700 border-slate-300 hover:border-slate-400")
@@ -217,35 +217,53 @@ export default function TransactionsPage() {
                 >
                   Sebelumnya
                 </button>
-                {/* Page numbers */}
-                {Array.from({ length: pageCount }).map((_, idx) => {
-                  const p = idx + 1;
-                  const isActive = p === page;
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setPage(p)}
-                      className={
-                        "min-w-[36px] h-9 px-2 rounded-md border text-sm transition " +
-                        (isActive
-                          ? "text-white border-transparent shadow-sm"
-                          : "bg-white text-slate-700 border-slate-300 hover:border-slate-400")
-                      }
-                      style={
-                        isActive ? { backgroundColor: "#0d6efd" } : undefined
-                      }
-                    >
-                      {p}
-                    </button>
-                  );
-                })}
+                {/* Page numbers: show only previous, current, next */}
+                {(() => {
+                  let nums: number[] = [];
+                  // base: previous, current, next
+                  if (page > 1) nums.push(page - 1);
+                  nums.push(page);
+                  if (page < pageCount) nums.push(page + 1);
+                  // edge fill to always show up to 3 numbers where possible
+                  if (nums.length < 3) {
+                    if (page === 1) {
+                      const p2 = page + 2;
+                      if (p2 <= pageCount) nums.push(p2);
+                    } else if (page === pageCount) {
+                      const p2 = page - 2;
+                      if (p2 >= 1) nums.unshift(p2);
+                    }
+                  }
+                  // de-dup and sort
+                  nums = Array.from(new Set(nums)).filter(n => n >= 1 && n <= pageCount).sort((a,b) => a-b);
+                  return nums.map((p) => {
+                    const isActive = p === page;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPage(p)}
+                        className={
+                          "min-w-[36px] h-9 px-3 rounded-full border text-sm transition " +
+                          (isActive
+                            ? "text-white border-transparent"
+                            : "bg-white text-slate-600 border-slate-300 hover:border-slate-400")
+                        }
+                        style={isActive ? { backgroundColor: "#0d6efd" } : undefined}
+                        aria-current={isActive ? "page" : undefined}
+                        aria-label={`Halaman ${p}`}
+                      >
+                        {p}
+                      </button>
+                    );
+                  });
+                })()}
                 <button
                   type="button"
                   onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
                   disabled={page === pageCount}
                   className={
-                    "px-3 py-1.5 rounded border text-sm transition " +
+                    "px-3 py-1.5 rounded-full border text-sm transition " +
                     (page === pageCount
                       ? "bg-white text-slate-400 border-slate-200 cursor-not-allowed"
                       : "bg-white text-slate-700 border-slate-300 hover:border-slate-400")
