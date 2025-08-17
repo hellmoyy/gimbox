@@ -105,11 +105,11 @@ export default function TransactionsPage() {
             {/* Filter buttons */}
             <div className="mb-3 flex flex-wrap items-center gap-2">
               {[
-                { label: "ALL", val: null as null },
+                { label: "Semua Transaksi", val: null as null },
                 { label: "Menunggu Pembayaran", val: "Pending" as const },
                 { label: "Diproses", val: "Diproses" as const },
                 { label: "Selesai", val: "Sukses" as const },
-                { label: "Dibatalkan", val: "Gagal" as const },
+                { label: "Gagal", val: "Gagal" as const },
               ].map(({ label, val }) => {
                 const isActive = active === val;
                 return (

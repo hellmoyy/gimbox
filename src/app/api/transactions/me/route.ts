@@ -34,7 +34,14 @@ export async function GET(req: NextRequest) {
       } else if (sf === "sukses" || sf === "selesai") {
         statuses = ["settlement", "capture", "success", "paid", "done", "complete"];
       } else if (sf === "gagal" || sf === "dibatalkan") {
-        statuses = ["expire", "cancel", "denied", "deny", "failure", "failed", "error"];
+        // Include common failure/cancellation/expiry variants from gateways and our system
+        statuses = [
+          "expire", "expired",
+          "cancel", "canceled", "cancelled",
+          "denied", "deny",
+          "failure", "failed",
+          "error", "void", "rejected", "chargeback"
+        ];
       }
       if (Array.isArray(statuses)) {
         match.status = { $in: statuses };

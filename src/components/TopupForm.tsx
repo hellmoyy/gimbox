@@ -108,11 +108,10 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   const sessionEmail = (session as any)?.user?.email as string | undefined;
   const [showLogin, setShowLogin] = useState(false);
 
-  // Restore MLBB draft (userId/serverId) after login redirect
+  // Restore draft (userId/serverId if any) after login redirect for any product
   useEffect(() => {
     try {
       if (typeof window === 'undefined') return;
-      if (code !== 'mlbb') return;
       const key = `topup:draft:${code}`;
       const raw = sessionStorage.getItem(key);
       if (raw) {
@@ -174,9 +173,9 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   function beginPayment() {
     // If not logged in, show login prompt
     if (!sessionEmail) {
-      // Persist current MLBB inputs so they survive the OAuth redirect
+      // Persist current inputs so they survive the OAuth redirect
       try {
-        if (typeof window !== 'undefined' && code === 'mlbb') {
+        if (typeof window !== 'undefined') {
           const key = `topup:draft:${code}`;
           sessionStorage.setItem(key, JSON.stringify({ userId: userIdInput, serverId: serverIdInput, ts: Date.now() }));
         }
@@ -459,7 +458,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   return (
   <form ref={formRef} className="bg-[#fefefe] rounded-xl border border-slate-200 shadow p-5 flex flex-col gap-4" onSubmit={handleSubmit}>
       {/* Game ID input */}
-      {code === "mlbb" ? (
+  {code === "mlbb" ? (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium text-slate-700">User ID</label>
@@ -521,14 +520,22 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
       ) : (
         <div>
           <label className="block text-sm font-medium text-slate-700">User ID</label>
-          <input type="text" name="userId" placeholder="Masukkan User ID" className="mt-1 w-full border border-slate-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-600" required />
+          <input
+            type="text"
+            name="userId"
+            placeholder="Masukkan User ID"
+            className="mt-1 w-full border border-slate-300 rounded px-3 py-2 bg-white text-slate-900 placeholder:text-slate-600"
+            required
+            value={userIdInput}
+            onChange={(e) => setUserIdInput(e.target.value)}
+          />
         </div>
       )}
 
       {/* Variants selection */}
       {activeVariants.length > 0 ? (
         <div>
-          <div className="mb-2 text-sm font-medium text-slate-700">Pilih Paket</div>
+          <div className="mb-2 text-sm font-medium text-slate-700">Pilih Item</div>
           {/* Condensed display: show selected (default cheapest). Tap to change. */}
           {(() => {
             const v = activeVariants[selectedIndex] || activeVariants[cheapestIndex];
@@ -575,7 +582,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
               <div className="absolute inset-0 bg-black/40" onClick={() => setShowVariantsModal(false)} />
               <div className="relative z-10 w-full max-w-md sm:rounded-2xl bg-white border border-slate-200 shadow-lg p-4 sm:p-5 max-h-[85vh] overflow-hidden">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-base font-semibold text-slate-900">Pilih Paket</div>
+                  <div className="text-base font-semibold text-slate-900">Pilih Item</div>
                   <button type="button" className="text-slate-500" onClick={() => setShowVariantsModal(false)}>✕</button>
                 </div>
                 <div className="overflow-y-auto -mx-1 px-1 pb-24 sm:pb-2 max-h-[70vh]">
@@ -664,7 +671,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                         {selectedPrice != null ? (
                           <span>Total: <span className="text-blue-600 font-bold text-[13px]">Rp {Number(total).toLocaleString()}</span></span>
                         ) : (
-                          <span>Pilih paket lebih dulu</span>
+                          <span>Pilih item lebih dulu</span>
                         )}
                       </div>
                     </div>
@@ -685,7 +692,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
               Total: <span className="font-semibold text-slate-900">Rp {Number(total).toLocaleString()}</span>
             </>); })()
           ) : (
-            <>Pilih paket untuk melihat total</>
+            <>Pilih item untuk melihat total</>
           )}
         </div>
         <button
@@ -908,12 +915,12 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
           <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white shadow-lg border border-slate-200 p-5">
             <div className="mb-3 text-base font-semibold text-slate-900">Masuk untuk melanjutkan</div>
             <div className="flex items-center gap-2">
-              <button
+      <button
                 type="button"
                 className="flex-1 inline-flex items-center justify-center gap-2 bg-[#0d6efd] hover:bg-[#0b5ed7] text-white rounded px-4 py-2 font-semibold"
                 onClick={() => {
                   try {
-                    if (typeof window !== 'undefined' && code === 'mlbb') {
+        if (typeof window !== 'undefined') {
                       const key = `topup:draft:${code}`;
                       sessionStorage.setItem(key, JSON.stringify({ userId: userIdInput, serverId: serverIdInput, ts: Date.now() }));
                   }
