@@ -82,6 +82,8 @@ export default function GimPlayPet({ selectedCharacter = "char01" as "char01"|"c
   const tickRef = useRef<number | null>(null);
   const [appearance, setAppearance] = useState<"char01"|"char02"|"char03"|"char04"|"char05"|"char06"|"premium01"|"premium02"|"premium03">(selectedCharacter);
   const [owned, setOwned] = useState<Set<string>>(new Set([selectedCharacter]));
+  const [ownedVehicles, setOwnedVehicles] = useState<Set<string>>(new Set());
+  const [vehicle, setVehicle] = useState<"vehicle01"|"vehicle02"|"vehicle03"|null>(null);
 
   // Derive level-up threshold
   const expToLevel = useMemo(() => pet.level * 100, [pet.level]);
@@ -92,10 +94,7 @@ export default function GimPlayPet({ selectedCharacter = "char01" as "char01"|"c
     if (initialName && initialName.trim().length >= 6 && base.name === "GimPet") {
       base.name = initialName.trim();
     }
-    const savedApp = typeof window !== "undefined" ? localStorage.getItem("gimplay_appearance") as any : null;
-    if (savedApp && ["char01","char02","char03","char04","char05","char06"].includes(savedApp)) {
-      setAppearance(savedApp);
-    }
+  // Do not set saved appearance yet; we'll validate ownership after fetching profile below
     const now = Date.now();
     const dtSec = Math.max(0, Math.floor((now - base.updatedAt) / 1000));
     let next = { ...base, updatedAt: now };
@@ -116,14 +115,31 @@ export default function GimPlayPet({ selectedCharacter = "char01" as "char01"|"c
     // Fetch server state and merge
     (async () => {
       try {
-        // Load owned characters
+        // Load owned characters, then apply saved appearance if owned
         try {
           const pr = await fetch("/api/profile", { cache: "no-store" });
           const pj = await pr.json();
           const ownedCharacters: string[] = pj?.profile?.ownedCharacters || [];
+          const ownedVeh: string[] = pj?.profile?.ownedVehicles || [];
           const set = new Set<string>(ownedCharacters);
           set.add(selectedCharacter);
           setOwned(set);
+          setOwnedVehicles(new Set<string>(ownedVeh));
+          const savedApp = typeof window !== "undefined" ? (localStorage.getItem("gimplay_appearance") as string | null) : null;
+          const all = new Set(["char01","char02","char03","char04","char05","char06","premium01","premium02","premium03"]);
+          if (savedApp && all.has(savedApp) && set.has(savedApp)) {
+            setAppearance(savedApp as any);
+          } else if (savedApp && !set.has(savedApp)) {
+            // Clean up invalid saved appearance
+            try { localStorage.removeItem("gimplay_appearance"); } catch {}
+          }
+          const savedVeh = typeof window !== "undefined" ? (localStorage.getItem("gimplay_vehicle") as string | null) : null;
+          const vehAll = new Set(["vehicle01","vehicle02","vehicle03"]);
+          if (savedVeh && vehAll.has(savedVeh) && (new Set<string>(ownedVeh)).has(savedVeh)) {
+            setVehicle(savedVeh as any);
+          } else if (savedVeh && !(new Set<string>(ownedVeh)).has(savedVeh)) {
+            try { localStorage.removeItem("gimplay_vehicle"); } catch {}
+          }
         } catch {}
         const res = await fetch("/api/pet", { cache: "no-store" });
         if (res.ok) {
@@ -319,7 +335,15 @@ export default function GimPlayPet({ selectedCharacter = "char01" as "char01"|"c
           <div className="text-lg font-bold text-slate-900">{pet.name}</div>
           <div className="text-sm text-slate-600">Lv {pet.level} • Exp {pet.exp}/{expToLevel}</div>
         </div>
-        <div className="text-sm font-semibold text-slate-900">🪙 {pet.coins}</div>
+        <div className="flex items-center gap-2">
+          <div className="text-sm font-semibold text-slate-900">🪙 {pet.coins}</div>
+          <a
+            href="/gamification/pet/shop"
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow hover:shadow-md active:scale-[0.99] transition"
+          >
+            Shop
+          </a>
+        </div>
       </div>
 
       {/* Character with movement */}
@@ -331,6 +355,13 @@ export default function GimPlayPet({ selectedCharacter = "char01" as "char01"|"c
               width={180}
               height={180}
               speed={3}
+              vehicle={vehicle ? {
+                src: vehicle === "vehicle01" ? "/images/games/vehicle/Flying Car 1/Flying-car.png" : vehicle === "vehicle02" ? "/images/games/vehicle/Flying Car 2/Flying-car.png" : "/images/games/vehicle/Flying Car 3/Flying-car.png",
+                width: 220,
+                offsetX: -8,
+                offsetY: 6,
+                flipWithDir: true,
+              } : undefined}
               animation={{
                 idle: {
                   dir:
@@ -389,7 +420,7 @@ export default function GimPlayPet({ selectedCharacter = "char01" as "char01"|"c
   <div className="grid grid-cols-2 gap-1">
         <StatCard label="HP" icon="❤️" value={pet.hp} tone="hp" />
         <StatCard label="Hunger" icon="🍗" value={pet.hunger} tone="hunger" />
-        <StatCard label="Energy" icon="⚡" value={pet.energy} tone="energy" />
+  <StatCard label="Energy" icon="⚡" value={pet.energy} tone="energy" />
         <StatCard label="Mood" icon="🙂" value={pet.mood} tone="mood" />
       </div>
 
@@ -439,85 +470,24 @@ export default function GimPlayPet({ selectedCharacter = "char01" as "char01"|"c
         </div>
       </div>
 
-      {/* Shop + Battle */}
-      <div className="mt-4 rounded-2xl border border-slate-200 p-3 bg-white">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-sm font-semibold text-slate-900">Shop (Premium)</div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">Use coins</span>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {["char01","char02","char03","char04","char05","char06","premium01","premium02","premium03"].map((c)=>{
-            const isOwned = owned.has(c);
-            const active = appearance === c;
-            const price = 100;
-            const isPremium = ["premium01","premium02","premium03"].includes(c);
-            const num = (isPremium ? c.replace("premium","") : c.replace("char","")) as string;
-            const label = `${isPremium ? "Premium" : "Character"} ${num}`;
-            const baseDir = isPremium ? "/images/games/character_premium" : "/images/games/character";
-            const thumb = `${baseDir}/Character ${num}/Png/Character Sprite/Idle/Character-Idle_00.png`;
-            return (
-              <button key={c}
-                onClick={async ()=>{
-                  if (isOwned) {
-                    setAppearance(c as any);
-                    localStorage.setItem("gimplay_appearance", c);
-                    pushLog(`Using ${c}`);
-                    return;
-                  }
-                  // Not owned: block switching; allow purchase only for premium ids
-                  if (!isPremium) { pushLog("Karakter ini tidak bisa dibeli. Hanya premium yang bisa dibeli."); return; }
-                  if (pet.coins < price) { pushLog("Koin tidak cukup untuk membeli"); return; }
-                  try {
-                    const res = await fetch("/api/characters/buy",{ method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ character: c, price })});
-                    if (res.ok) {
-                      setOwned((o)=> new Set([...Array.from(o), c]));
-                      setPet((p)=> ({...p, coins: Math.max(0, p.coins - price)}));
-                      pushLog(`Berhasil membeli ${c}`);
-                    } else {
-                      const j = await res.json().catch(()=>({} as any));
-                      pushLog(j?.error || "Gagal membeli karakter");
-                    }
-                  } catch {}
-                }}
-                className={`rounded-xl border p-2 text-center ${active?"ring-2 ring-blue-500 border-blue-300":"border-slate-200"} ${isOwned?"bg-white hover:bg-slate-50":"bg-amber-50 hover:bg-amber-100"}`}
-              >
-                <div className="h-24 overflow-hidden flex items-center justify-center">
-                  <img src={thumb} alt={label} className="h-24 w-auto object-contain select-none pointer-events-none scale-150 origin-center" />
-                </div>
-                <div className="mt-0.5 text-xs font-medium text-slate-800">{label}</div>
-                <div className="mt-0.5 text-[10px] font-medium text-slate-600">{isOwned? (active?"Selected":"Use") : ( isPremium ? `Buy ${price}` : "Locked" )}</div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Battle */}
       <div className="mt-4 rounded-2xl border border-slate-200 p-3 bg-white">
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-semibold text-slate-900">Battle</div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700">PvP soon</span>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={practiceBattle}
-            disabled={pet.sleeping}
-            className="relative overflow-hidden flex items-center justify-center gap-2 rounded-xl px-3 py-2 bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 text-white text-sm font-semibold shadow-lg hover:shadow-xl active:scale-[0.99] transition disabled:opacity-60"
-          >
-            <span className="text-base leading-none">⚔️</span>
-            <span>Fight (Practice)</span>
-            <span className="ml-auto text-[10px] rounded-full bg-white/20 px-2 py-0.5">-15 energy</span>
-          </button>
-          <button
-            disabled
-            className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 bg-white text-slate-700 text-sm font-semibold border border-slate-200 shadow hover:bg-slate-50 disabled:opacity-60"
-            title="Coming soon"
-          >
-            <span className="text-base leading-none">🧑‍🤝‍🧑</span>
-            <span>PvP</span>
-            <span className="ml-auto text-[10px] rounded-full bg-slate-100 px-2 py-0.5">soon</span>
-          </button>
-        </div>
+        <button
+          onClick={() => alert("Coming soon")}
+          disabled={pet.sleeping}
+          className="relative overflow-hidden w-full flex items-center gap-3 rounded-2xl px-4 py-3 bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 text-white text-base font-bold shadow-xl hover:shadow-2xl active:scale-[0.99] transition disabled:opacity-60"
+        >
+          <span className="text-xl leading-none">⚔️</span>
+          <span className="flex flex-col leading-tight text-left">
+            <span>Fight</span>
+            <span className="text-[11px] font-normal text-white/85">Main dengan user lain</span>
+          </span>
+          <span className="ml-auto text-[11px] rounded-full bg-white/20 px-2 py-0.5">- 15 Point</span>
+        </button>
+  <p className="mt-2 text-center text-[11px] text-slate-600">Main,Menang dan dapatkan Point dari Lawan</p>
       </div>
 
   {/* Logs panel removed as requested */}

@@ -23,9 +23,10 @@ type Props = {
   maintainAspect?: boolean; // preserve original sprite aspect ratio (uses width), default true
   parallaxSpeed?: number; // background scroll speed in px/sec when moving (default 60)
   showGround?: boolean; // draw a simple ground line; default false when using background
+  vehicle?: { src: string; width?: number; height?: number; offsetX?: number; offsetY?: number; flipWithDir?: boolean };
 };
 
-export default function GimPlayCharacter({ src = "/images/logo/logo-black.png", animation, width = 64, height = 64, speed = 2, maintainAspect = true, parallaxSpeed = 60, showGround = false }: Props) {
+export default function GimPlayCharacter({ src = "/images/logo/logo-black.png", animation, width = 64, height = 64, speed = 2, maintainAspect = true, parallaxSpeed = 60, showGround = false, vehicle }: Props) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [x, setX] = useState(20);
   const [dir, setDir] = useState<"left" | "right">("right");
@@ -138,6 +139,21 @@ export default function GimPlayCharacter({ src = "/images/logo/logo-black.png", 
 
   {/* Ground (optional) */}
   {showGround && <div className="absolute bottom-2 left-0 right-0 h-1 bg-slate-200" />}
+
+      {/* Vehicle (optional, rendered under character) */}
+      {vehicle && (
+        <img
+          src={vehicle.src}
+          alt="vehicle"
+          style={{
+            width: vehicle.width ?? Math.round(width * 1.2),
+            height: vehicle.height,
+            transform: `translate(${(x + (vehicle.offsetX ?? 0))}px, ${(vehicle.offsetY ?? 0)}px) scaleX(${(vehicle.flipWithDir ?? true) && dir === "left" ? -1 : 1})`,
+            transformOrigin: "center",
+          }}
+          className="absolute bottom-2 select-none pointer-events-none drop-shadow"
+        />
+      )}
 
       {/* Character */}
       {(() => {

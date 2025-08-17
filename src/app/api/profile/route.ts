@@ -7,6 +7,7 @@ type UserProfile = {
   selectedCharacter?: string;
   characterName?: string;
   ownedCharacters?: string[];
+  ownedVehicles?: string[];
   createdAt: Date;
   updatedAt: Date;
 };
