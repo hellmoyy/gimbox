@@ -27,7 +27,8 @@ body {
 
 /* Use dynamic viewport units to keep layout stable when mobile browser chrome changes */
 html, body {
-  min-height: 100dvh;
+  min-height: calc(var(--app-vh, 1vh) * 100);
+  overscroll-behavior-y: contain; /* reduce rubber-banding moving fixed elements */
 }
 
 /* iOS Safari: prevent input zoom (keep >=16px) and stabilize fixed bottom bar */

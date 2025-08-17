@@ -1,6 +1,7 @@
 "use client";
 import { usePathname } from "next/navigation";
 import BottomNavGate from "./BottomNavGate";
+import ViewportUnitsFix from "./ViewportUnitsFix";
 
 export default function RootShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -13,9 +14,10 @@ export default function RootShell({ children }: { children: React.ReactNode }) {
 
   // Public app shell with mobile-centered container and bottom nav
   return (
-    <div className="min-h-[100dvh] flex flex-col items-center bg-black">
-      {/* The pb-24 reserves space for BottomNav; when BottomNav hides (keyboard open), it remains harmless */}
-      <div className="w-full max-w-md flex-1 flex flex-col md:rounded-2xl/3 bg-[#f7f7f7] pb-24 overscroll-contain">
+    <div className="h-[calc(var(--app-vh,1vh)*100)] flex flex-col items-center bg-black pb-[env(safe-area-inset-bottom)]">
+      <ViewportUnitsFix />
+  {/* Reserve space for BottomNav height (~72px) + safe area to avoid overlap while scrolling */}
+  <div className="w-full max-w-md flex-1 flex flex-col md:rounded-2xl/3 bg-[#f7f7f7] pb-[calc(5.5rem+env(safe-area-inset-bottom))] overscroll-contain touch-pan-y">
         {children}
       </div>
       <BottomNavGate />
