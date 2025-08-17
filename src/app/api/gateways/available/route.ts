@@ -13,7 +13,25 @@ export async function GET() {
       { name: "xendit", enabled: Boolean(map["gateway:xendit"]?.enabled), methods: Array.isArray(map["gateway:xendit"]?.methods) ? map["gateway:xendit"].methods : [] },
       { name: "moota", enabled: Boolean(map["gateway:moota"]?.enabled), methods: Array.isArray(map["gateway:moota"]?.methods) ? map["gateway:moota"].methods : [] },
     ];
-    return Response.json({ success: true, data });
+    // Also provide active payments ordering for client UIs
+    const ap = await db.collection("settings").findOne({ key: "gateway:active_payments" });
+    const activePayments = Array.isArray(ap?.value?.items) ? ap!.value.items : [];
+    // Only return enabled items and keep order
+    const filtered = activePayments
+      .filter((it: any) => it && it.enabled !== false)
+      .map((it: any) => ({
+        id: String(it.id),
+        label: it.label,
+        gateway: it.gateway,
+        method: it.method,
+        logoUrl: it.logoUrl,
+        enabled: it.enabled,
+        sort: it.sort,
+        feeType: it.feeType === 'percent' ? 'percent' : 'flat',
+        feeValue: typeof it.feeValue === 'number' ? it.feeValue : Number(it.feeValue || 0) || 0,
+      }))
+      .sort((a: any, b: any) => (a.sort ?? 0) - (b.sort ?? 0));
+    return Response.json({ success: true, data, activePayments: filtered });
   } catch (e: any) {
     return Response.json({ success: false, message: e.message }, { status: 500 });
   }

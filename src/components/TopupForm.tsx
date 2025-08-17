@@ -31,6 +31,10 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   const [selectedGateway, setSelectedGateway] = useState<string>("midtrans");
   const [selectedMethod, setSelectedMethod] = useState<string>("");
   const [showMethodModal, setShowMethodModal] = useState(false);
+  const [activePaymentsUI, setActivePaymentsUI] = useState<Array<{ id: string; label: string; gateway: string; method: string; logoUrl?: string; enabled?: boolean; sort?: number; feeType?: 'flat'|'percent'; feeValue?: number }>>([]);
+  const [useGimcash, setUseGimcash] = useState(false);
+  const [showTopupInput, setShowTopupInput] = useState(false);
+  const [topupAmount, setTopupAmount] = useState<number | ''>('');
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [methodFees, setMethodFees] = useState<Record<string, number>>({});
   const lastChosenKindRef = useRef<'qris' | 'emoney' | 'va' | 'transfer' | ''>('');
@@ -103,6 +107,9 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
           setSelectedGateway(enabledList[0].name);
           setSelectedMethod(enabledList[0].methods?.[0] || "");
         }
+  // Load ordered Active Payments from API response
+  const aps: Array<any> = Array.isArray(j?.activePayments) ? j.activePayments : [];
+  setActivePaymentsUI(aps);
         // Also fetch method fees
         try {
           const rf = await fetch('/api/gateways/fees', { cache: 'no-store' });
@@ -139,63 +146,21 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
     setShowMethodModal(true);
   }
 
-  function chooseMethodAndPay(kind: 'qris' | 'emoney' | 'va' | 'transfer') {
-    lastChosenKindRef.current = kind;
-    // Force Transfer Bank via Moota sandbox
-    if (kind === 'transfer') {
-      setSelectedGateway('moota');
-      setSelectedMethod('bank_transfer');
-      setShowMethodModal(false);
-      formRef.current?.requestSubmit();
-      return;
-    }
-    // Pick available gateway/method from config (prefer Xendit if enabled)
-    const xendit = gateways.find(g => g.name === 'xendit' && g.enabled);
-    const mid = gateways.find(g => g.name === 'midtrans' && g.enabled);
+  function methodToKind(method: string): 'qris' | 'emoney' | 'va' | 'transfer' {
+    const m = (method || '').toLowerCase();
+    if (m === 'qris') return 'qris';
+    if (m === 'bank_transfer') return 'transfer';
+    if (m.startsWith('va_')) return 'va';
+    if (['gopay', 'shopeepay', 'ovo', 'dana', 'linkaja'].includes(m)) return 'emoney';
+    return 'va';
+  }
 
-    if (xendit) {
-      setSelectedGateway('xendit');
-      // Map kind to method code hints (stored as order.method)
-      if (kind === 'qris') setSelectedMethod('qris');
-      else if (kind === 'emoney') setSelectedMethod('emoney');
-      else if (kind === 'va' || kind === 'transfer') setSelectedMethod('va_bca');
-      setShowMethodModal(false);
-      formRef.current?.requestSubmit();
-      return;
-    }
-    // Fallback to Midtrans
-    if (!mid) {
-      // No midtrans available: for QRIS fallback to moota so we can show QR instructions
-      if (kind === 'qris') {
-        setSelectedGateway('moota');
-        setSelectedMethod('qris');
-      }
-      setShowMethodModal(false);
-      formRef.current?.requestSubmit();
-      return;
-    }
-    const methods = Array.isArray(mid.methods) ? mid.methods : [];
-    let methodCode = '';
-    if (kind === 'qris' && methods.includes('qris')) methodCode = 'qris';
-    else if (kind === 'emoney') {
-      // Prefer GoPay, fallback to ShopeePay
-      if (methods.includes('gopay')) methodCode = 'gopay';
-      else if (methods.includes('shopeepay')) methodCode = 'shopeepay';
-  } else if (kind === 'va') {
-      // Auto-pick the first available VA method (Midtrans will handle specific bank UI)
-      const firstVa = methods.find(m => m.startsWith('va_'));
-      if (firstVa) methodCode = firstVa;
-    }
-    if (methodCode) {
-      setSelectedGateway('midtrans');
-      setSelectedMethod(methodCode);
-    } else if (kind === 'qris') {
-      // If user chose QRIS but Midtrans doesn't support it, fallback to moota QR flow
-      setSelectedGateway('moota');
-      setSelectedMethod('qris');
-    }
+  function chooseActivePaymentAndPay(item: { gateway: string; method: string }) {
+    const kind = methodToKind(item.method);
+    lastChosenKindRef.current = kind;
+    setSelectedGateway(item.gateway);
+    setSelectedMethod(item.method);
     setShowMethodModal(false);
-    // Submit the form; handleSubmit will use selectedGateway/selectedMethod
     formRef.current?.requestSubmit();
   }
 
@@ -683,76 +648,189 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                 <button type="button" onClick={() => setShowMethodModal(false)} className="p-1 rounded text-slate-500 hover:bg-slate-100">✕</button>
               </div>
               <div className="p-3">
-                {/* GimCash */}
-                <div className="mb-2 flex items-center justify-between rounded-lg border border-slate-200 p-3">
-                  <div className="flex items-center gap-3">
-                    <img src="/images/logo/logo128.png" alt="GimCash" className="object-contain" style={{ width: 40, height: 40 }} />
-                    <div>
-                      <div className="text-sm font-medium text-slate-900">GimCash</div>
-                      <div className="text-xs text-slate-600">Balance: {walletBalance == null ? '—' : `Rp ${walletBalance.toLocaleString()}`}</div>
-                      <div className="text-xs text-green-700">Biaya admin: Rp 0</div>
+                {/* Header: Dompet */}
+                <div className="text-[12px] font-medium text-slate-500 uppercase tracking-wide mb-2">Dompet</div>
+                {/* GimCash row */}
+                <div className="mb-3 flex items-center justify-between rounded-lg border border-slate-200 p-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img src="/images/logo/logo128.png" alt="GimCash" className="object-contain" style={{ width: 36, height: 36 }} />
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-semibold text-slate-900">GimCash: {walletBalance == null ? '—' : <span className="text-blue-600">Rp {walletBalance.toLocaleString()}</span>}</div>
+                      <div className="mt-1">
+                        {!showTopupInput ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowTopupInput(true)}
+                            className="text-[11px] px-2 py-0.5 rounded border border-blue-600 text-blue-700 hover:bg-blue-50"
+                          >Topup</button>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] text-slate-600">Nominal</span>
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={1000}
+                                step={1000}
+                                placeholder="contoh: 20000"
+                                className="h-7 w-28 border rounded px-2 text-[12px]"
+                                value={topupAmount}
+                                onChange={(e) => setTopupAmount(e.target.value ? Math.max(0, Number(e.target.value)) : '')}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowTopupInput(false)}
+                                className="text-[11px] px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-50"
+                              >Batal</button>
+                              <button
+                                type="button"
+                                disabled={!topupAmount || Number(topupAmount) < 1000}
+                                onClick={() => { if (topupAmount) window.location.href = `/account?topupAmount=${Number(topupAmount)}`; }}
+                                className="text-[11px] px-2 py-1 rounded border border-blue-600 text-blue-700 disabled:opacity-50 hover:bg-blue-50"
+                              >Lanjut</button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {[10000, 20000, 50000, 100000].map((amt) => (
+                                <button
+                                  key={amt}
+                                  type="button"
+                                  onClick={() => setTopupAmount(amt)}
+                                  className="text-[11px] px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-50"
+                                >Rp {amt.toLocaleString()}</button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <a href="/account" className="text-xs px-2 py-1 rounded border border-blue-600 text-blue-700 hover:bg-blue-50">Topup</a>
-                    <button type="button" className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-500 cursor-not-allowed" disabled>Gunakan</button>
+                    <span className="text-[12px] text-slate-700 min-w-[96px] text-right">{selectedPrice != null ? `Rp ${Number(selectedPrice).toLocaleString()}` : '—'}</span>
+                    {(() => {
+                      const canUse = (walletBalance ?? -1) >= (selectedPrice ?? Number.POSITIVE_INFINITY);
+                      if (canUse) {
+                        return (
+                          <label className="inline-flex items-center gap-2 text-[12px] text-slate-700">
+                            <input type="checkbox" checked={useGimcash} onChange={(e) => setUseGimcash(e.target.checked)} />
+                            <span>Gunakan</span>
+                          </label>
+                        );
+                      }
+                      return null; // Hide insufficient balance message as requested
+                    })()}
                   </div>
                 </div>
 
-                {/* Midtrans methods */}
-                <div className="grid grid-cols-2 gap-2">
-                  {/* QRIS */}
-                  <button type="button" onClick={() => chooseMethodAndPay('qris')} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-800 hover:border-slate-300">
-                    <span className="flex items-center gap-2 w-full">
-                      <img src="/images/iconpayment/qris.png" alt="QRIS" className="object-contain" style={{ width: 40, height: 40 }} />
-                      <span className="flex-1 ml-2 text-left">
-                        <div>QRIS</div>
-                        <div className="text-[10px] leading-tight text-slate-600">+Biaya: Rp {Number(methodFees['qris'] || 0).toLocaleString()}</div>
-                      </span>
-                    </span>
-                  </button>
-                  {/* Virtual Account */}
-                  <button type="button" onClick={() => chooseMethodAndPay('va')} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-800 hover:border-slate-300">
-                    <span className="flex items-center gap-2 w-full">
-                      <img src="/images/iconpayment/va.png" alt="Virtual Account" className="object-contain" style={{ width: 40, height: 40 }} />
-                      <span className="flex-1 ml-2 text-left">
-                        <div>Virtual Account</div>
-                        <div className="text-[10px] leading-tight text-slate-600">+Biaya: Rp {(() => {
-                          const vaKeys = Object.keys(methodFees || {}).filter(k => k.startsWith('va_'));
-                          const vals = vaKeys.map(k => Number(methodFees[k] || 0));
-                          const min = vals.length ? Math.min(...vals) : 0;
-                          return min.toLocaleString();
-                        })()}</div>
-                      </span>
-                    </span>
-                  </button>
-                  {/* E-Money (GoPay/ShopeePay) */}
-                  <button type="button" onClick={() => chooseMethodAndPay('emoney')} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-800 hover:border-slate-300">
-                    <span className="flex items-center gap-2 w-full">
-                      <img src="/images/iconpayment/emoney.png" alt="E-Money" className="object-contain" style={{ width: 40, height: 40 }} />
-                      <span className="flex-1 ml-2 text-left">
-                        <div>E-Money</div>
-                        <div className="text-[10px] leading-tight text-slate-600">+Biaya: Rp {(() => {
-                          const fees:number[] = [];
-                          if (methodFees['gopay'] != null) fees.push(Number(methodFees['gopay'] || 0));
-                          if (methodFees['shopeepay'] != null) fees.push(Number(methodFees['shopeepay'] || 0));
-                          const min = fees.length ? Math.min(...fees) : 0;
-                          return min.toLocaleString();
-                        })()}</div>
-                      </span>
-                    </span>
-                  </button>
-                  {/* Transfer Bank (fallback to Permata VA) */}
-                  <button type="button" onClick={() => chooseMethodAndPay('transfer')} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-800 hover:border-slate-300">
-                    <span className="flex items-center gap-2 w-full">
-                      <img src="/images/iconpayment/bank.png" alt="Transfer Bank" className="object-contain" style={{ width: 40, height: 40 }} />
-                      <span className="flex-1 ml-2 text-left">
-                        <div>Transfer Bank</div>
-                        <div className="text-[10px] leading-tight text-slate-600">+Biaya: Rp {Number(methodFees['va_permata'] || 0).toLocaleString()}</div>
-                      </span>
-                    </span>
-                  </button>
+                {/* Header: Pembayaran Lain */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-[12px] font-medium text-slate-500 uppercase tracking-wide">Pembayaran Lain</div>
+                  <div className="text-[12px] text-slate-500">Bayar Total Belanja</div>
                 </div>
+
+                {(() => {
+                  const canUse = (walletBalance ?? -1) >= (selectedPrice ?? Number.POSITIVE_INFINITY);
+                  const allowed = activePaymentsUI.filter((ap) => {
+                    if (!ap || !ap.method || !ap.gateway) return false;
+                    const gw = gateways.find(g => g.name === ap.gateway);
+                    return !!gw && gw.enabled && Array.isArray(gw.methods) && gw.methods.includes(ap.method);
+                  });
+                  const recommended = !canUse ? (allowed.find((ap) => methodToKind(ap.method) === 'qris')?.id || null) : null;
+                  // expose in window for optional debugging (no side effects)
+                  (typeof window !== 'undefined') && ((window as any).__apRecommended = recommended);
+                  return null;
+                })()}
+
+                {/* Group: E-Wallet & QRIS */}
+                {(() => {
+                  const list = activePaymentsUI.filter((ap) => {
+                    if (!ap || !ap.method || !ap.gateway) return false;
+                    const gw = gateways.find(g => g.name === ap.gateway);
+                    if (!gw || !gw.enabled || !Array.isArray(gw.methods) || !gw.methods.includes(ap.method)) return false;
+                    const kind = methodToKind(ap.method);
+                    return kind === 'qris' || kind === 'emoney';
+                  });
+                  if (!list.length) return null;
+                  return (
+                    <div className="mb-3">
+                      <div className="text-[12px] text-slate-500 mb-1">E-Wallet & QRIS</div>
+                      <div className="flex flex-col divide-y rounded-lg border border-slate-200 overflow-hidden">
+                        {list.map((ap) => {
+                          const kind = methodToKind(ap.method);
+                          const fallbackIcon = kind === 'qris' ? '/images/iconpayment/qris.png'
+                            : kind === 'emoney' ? '/images/iconpayment/emoney.png'
+                            : '/images/iconpayment/va.png';
+                          const base = selectedPrice ?? 0;
+                          const fee = (ap.feeType === 'percent')
+                            ? Math.round(base * (Number(ap.feeValue || 0) / 100))
+                            : ((ap.feeValue ?? Number(methodFees[ap.method] || 0)) || 0);
+                          const total = base + fee;
+                          const rec = (typeof window !== 'undefined') ? ((window as any).__apRecommended === ap.id) : false;
+                          return (
+                            <button key={ap.id} type="button" onClick={() => chooseActivePaymentAndPay(ap)} className="w-full bg-white hover:bg-slate-50">
+                              <div className="flex items-center justify-between gap-2 px-3 py-2.5 text-[13px]">
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <img src={ap.logoUrl || fallbackIcon} alt={ap.label} className="object-contain" style={{ width: 28, height: 28 }} />
+                                  <span className="truncate text-left text-slate-900 font-medium">{ap.label || `${ap.gateway}/${ap.method}`}</span>
+                                </span>
+                                <span className="flex items-center gap-3">
+                                  <span className="text-[12px] text-slate-700 min-w-[96px] text-right">{selectedPrice != null ? `Rp ${total.toLocaleString()}` : '—'}</span>
+                                  <span className={`w-4 h-4 inline-block rounded-full border ${rec ? 'bg-blue-500 border-blue-600' : 'border-slate-300'}`} />
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Group: Lainnya (VA/Transfer) */}
+                {(() => {
+                  const list = activePaymentsUI.filter((ap) => {
+                    if (!ap || !ap.method || !ap.gateway) return false;
+                    const gw = gateways.find(g => g.name === ap.gateway);
+                    if (!gw || !gw.enabled || !Array.isArray(gw.methods) || !gw.methods.includes(ap.method)) return false;
+                    const kind = methodToKind(ap.method);
+                    return kind === 'va' || kind === 'transfer';
+                  });
+                  if (!list.length) return null;
+                  return (
+                    <div className="mb-1">
+                      <div className="text-[12px] text-slate-500 mb-1">Virtual Account & Transfer</div>
+                      <div className="flex flex-col divide-y rounded-lg border border-slate-200 overflow-hidden">
+                        {list.map((ap) => {
+                          const kind = methodToKind(ap.method);
+                          const fallbackIcon = kind === 'transfer' ? '/images/iconpayment/bank.png' : '/images/iconpayment/va.png';
+                          const base = selectedPrice ?? 0;
+                          const fee = (ap.feeType === 'percent')
+                            ? Math.round(base * (Number(ap.feeValue || 0) / 100))
+                            : ((ap.feeValue ?? Number(methodFees[ap.method] || 0)) || 0);
+                          const total = base + fee;
+                          const rec = (typeof window !== 'undefined') ? ((window as any).__apRecommended === ap.id) : false;
+                          return (
+                            <button key={ap.id} type="button" onClick={() => chooseActivePaymentAndPay(ap)} className="w-full bg-white hover:bg-slate-50">
+                              <div className="flex items-center justify-between gap-2 px-3 py-2.5 text-[13px]">
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <img src={ap.logoUrl || fallbackIcon} alt={ap.label} className="object-contain" style={{ width: 28, height: 28 }} />
+                                  <span className="truncate text-left text-slate-900 font-medium">{ap.label || `${ap.gateway}/${ap.method}`}</span>
+                                </span>
+                                <span className="flex items-center gap-3">
+                                  <span className="text-[12px] text-slate-700 min-w-[96px] text-right">{selectedPrice != null ? `Rp ${total.toLocaleString()}` : '—'}</span>
+                                  <span className={`w-4 h-4 inline-block rounded-full border ${rec ? 'bg-blue-500 border-blue-600' : 'border-slate-300'}`} />
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {activePaymentsUI.length === 0 && (
+                  <div className="text-xs text-slate-500 border rounded p-3">Belum ada metode aktif. Atur di Dashboard &gt; Payment Gateway &gt; Active Payment.</div>
+                )}
               </div>
             </div>
           </div>
