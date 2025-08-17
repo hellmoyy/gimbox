@@ -1,4 +1,4 @@
-import GimPlayPet from "../../../components/GimPlayPet";
+import Client from "@/app/gamification/pet/petClient";
 
 export default async function PetPage() {
   return (
@@ -11,7 +11,7 @@ export default async function PetPage() {
         <p className="text-slate-600 mt-1">Rawat peliharaanmu, tingkatkan level, dan kumpulkan koin.</p>
 
         <div className="mt-4">
-          <GimPlayPet />
+          <Client />
         </div>
       </div>
     </main>

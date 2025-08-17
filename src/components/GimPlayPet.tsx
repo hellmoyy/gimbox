@@ -62,10 +62,10 @@ function clamp(n: number, min = 0, max = 100) {
   return Math.max(min, Math.min(max, n));
 }
 
-export default function GimPlayPet() {
+export default function GimPlayPet({ selectedCharacter = "char01" as "char01"|"char02"|"char03"|"char04"|"char05"|"char06", initialName }: { selectedCharacter?: "char01"|"char02"|"char03"|"char04"|"char05"|"char06"; initialName?: string }) {
   // Render a stable default for SSR, then hydrate client state after mount
   const [pet, setPet] = useState<Pet>({
-    name: "GimPet",
+  name: initialName || "GimPet",
     level: 1,
     exp: 0,
     coins: 0,
@@ -80,6 +80,8 @@ export default function GimPlayPet() {
   const [ready, setReady] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const tickRef = useRef<number | null>(null);
+  const [appearance, setAppearance] = useState<"char01"|"char02"|"char03"|"char04"|"char05"|"char06"|"premium01"|"premium02"|"premium03">(selectedCharacter);
+  const [owned, setOwned] = useState<Set<string>>(new Set([selectedCharacter]));
 
   // Derive level-up threshold
   const expToLevel = useMemo(() => pet.level * 100, [pet.level]);
@@ -87,6 +89,13 @@ export default function GimPlayPet() {
   // Load from storage and apply time drift only after mount
   useEffect(() => {
     const base = loadPet();
+    if (initialName && initialName.trim().length >= 6 && base.name === "GimPet") {
+      base.name = initialName.trim();
+    }
+    const savedApp = typeof window !== "undefined" ? localStorage.getItem("gimplay_appearance") as any : null;
+    if (savedApp && ["char01","char02","char03","char04","char05","char06"].includes(savedApp)) {
+      setAppearance(savedApp);
+    }
     const now = Date.now();
     const dtSec = Math.max(0, Math.floor((now - base.updatedAt) / 1000));
     let next = { ...base, updatedAt: now };
@@ -103,6 +112,43 @@ export default function GimPlayPet() {
     }
     setPet(next);
     setReady(true);
+
+    // Fetch server state and merge
+    (async () => {
+      try {
+        // Load owned characters
+        try {
+          const pr = await fetch("/api/profile", { cache: "no-store" });
+          const pj = await pr.json();
+          const ownedCharacters: string[] = pj?.profile?.ownedCharacters || [];
+          const set = new Set<string>(ownedCharacters);
+          set.add(selectedCharacter);
+          setOwned(set);
+        } catch {}
+        const res = await fetch("/api/pet", { cache: "no-store" });
+        if (res.ok) {
+          const j = await res.json();
+          const s = j?.pet as any;
+          if (s) {
+            const merged: Pet = {
+              name: typeof s.name === "string" ? s.name : next.name,
+              level: typeof s.level === "number" ? s.level : next.level,
+              exp: typeof s.exp === "number" ? s.exp : next.exp,
+              coins: typeof s.coins === "number" ? s.coins : next.coins,
+              hp: typeof s.hp === "number" ? s.hp : next.hp,
+              hunger: typeof s.hunger === "number" ? s.hunger : next.hunger,
+              energy: typeof s.energy === "number" ? s.energy : next.energy,
+              mood: typeof s.mood === "number" ? s.mood : next.mood,
+              sleeping: typeof s.sleeping === "boolean" ? s.sleeping : next.sleeping,
+              inventory: s?.inventory && typeof s.inventory.food === "number" ? { food: s.inventory.food } : next.inventory,
+              updatedAt: Date.now(),
+            };
+            setPet(merged);
+            savePet(merged);
+          }
+        }
+      } catch {}
+    })();
 
     tickRef.current = window.setInterval(() => {
       setPet((p) => {
@@ -126,6 +172,26 @@ export default function GimPlayPet() {
       if (tickRef.current) clearInterval(tickRef.current);
     };
   }, []);
+
+  // Debounced persist to server when pet changes
+  useEffect(() => {
+    if (!ready) return;
+    const ctrl = new AbortController();
+    const t = window.setTimeout(async () => {
+      try {
+        await fetch("/api/pet", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pet }),
+          signal: ctrl.signal,
+        });
+      } catch {}
+    }, 600);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [pet, ready]);
 
   function pushLog(msg: string) {
     setLog((l) => [msg, ...l.slice(0, 9)]);
@@ -267,14 +333,48 @@ export default function GimPlayPet() {
               speed={3}
               animation={{
                 idle: {
-                  dir: "/images/games/character/Character 01/Png/Character Sprite/Idle",
+                  dir:
+                    appearance === "char02"
+                      ? "/images/games/character/Character 02/Png/Character Sprite/Idle"
+                      : appearance === "char03"
+                        ? "/images/games/character/Character 03/Png/Character Sprite/Idle"
+                        : appearance === "char04"
+                          ? "/images/games/character/Character 04/Png/Character Sprite/Idle"
+                          : appearance === "char05"
+                            ? "/images/games/character/Character 05/Png/Character Sprite/Idle"
+                            : appearance === "char06"
+                              ? "/images/games/character/Character 06/Png/Character Sprite/Idle"
+                              : appearance === "premium01"
+                                ? "/images/games/character_premium/Character 01/Png/Character Sprite/Idle"
+                                : appearance === "premium02"
+                                  ? "/images/games/character_premium/Character 02/Png/Character Sprite/Idle"
+                                  : appearance === "premium03"
+                                    ? "/images/games/character_premium/Character 03/Png/Character Sprite/Idle"
+                              : "/images/games/character/Character 01/Png/Character Sprite/Idle",
                   prefix: "Character-Idle_",
                   count: 20,
                   pad: 2,
                   ext: "png",
                 },
                 run: {
-                  dir: "/images/games/character/Character 01/Png/Character Sprite/Run",
+                  dir:
+                    appearance === "char02"
+                      ? "/images/games/character/Character 02/Png/Character Sprite/Run"
+                      : appearance === "char03"
+                        ? "/images/games/character/Character 03/Png/Character Sprite/Run"
+                        : appearance === "char04"
+                          ? "/images/games/character/Character 04/Png/Character Sprite/Run"
+                          : appearance === "char05"
+                            ? "/images/games/character/Character 05/Png/Character Sprite/Run"
+                            : appearance === "char06"
+                              ? "/images/games/character/Character 06/Png/Character Sprite/Run"
+                              : appearance === "premium01"
+                                ? "/images/games/character_premium/Character 01/Png/Character Sprite/Run"
+                                : appearance === "premium02"
+                                  ? "/images/games/character_premium/Character 02/Png/Character Sprite/Run"
+                                  : appearance === "premium03"
+                                    ? "/images/games/character_premium/Character 03/Png/Character Sprite/Run"
+                              : "/images/games/character/Character 01/Png/Character Sprite/Run",
                   prefix: "Character-Run_",
                   count: 30,
                   pad: 2,
@@ -336,6 +436,59 @@ export default function GimPlayPet() {
               <span className="text-[10px] font-medium text-slate-800">Buy</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Shop + Battle */}
+      <div className="mt-4 rounded-2xl border border-slate-200 p-3 bg-white">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-semibold text-slate-900">Shop (Premium)</div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">Use coins</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {["char01","char02","char03","char04","char05","char06","premium01","premium02","premium03"].map((c)=>{
+            const isOwned = owned.has(c);
+            const active = appearance === c;
+            const price = 100;
+            const isPremium = ["premium01","premium02","premium03"].includes(c);
+            const num = (isPremium ? c.replace("premium","") : c.replace("char","")) as string;
+            const label = `${isPremium ? "Premium" : "Character"} ${num}`;
+            const baseDir = isPremium ? "/images/games/character_premium" : "/images/games/character";
+            const thumb = `${baseDir}/Character ${num}/Png/Character Sprite/Idle/Character-Idle_00.png`;
+            return (
+              <button key={c}
+                onClick={async ()=>{
+                  if (isOwned) {
+                    setAppearance(c as any);
+                    localStorage.setItem("gimplay_appearance", c);
+                    pushLog(`Using ${c}`);
+                    return;
+                  }
+                  // Not owned: block switching; allow purchase only for premium ids
+                  if (!isPremium) { pushLog("Karakter ini tidak bisa dibeli. Hanya premium yang bisa dibeli."); return; }
+                  if (pet.coins < price) { pushLog("Koin tidak cukup untuk membeli"); return; }
+                  try {
+                    const res = await fetch("/api/characters/buy",{ method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ character: c, price })});
+                    if (res.ok) {
+                      setOwned((o)=> new Set([...Array.from(o), c]));
+                      setPet((p)=> ({...p, coins: Math.max(0, p.coins - price)}));
+                      pushLog(`Berhasil membeli ${c}`);
+                    } else {
+                      const j = await res.json().catch(()=>({} as any));
+                      pushLog(j?.error || "Gagal membeli karakter");
+                    }
+                  } catch {}
+                }}
+                className={`rounded-xl border p-2 text-center ${active?"ring-2 ring-blue-500 border-blue-300":"border-slate-200"} ${isOwned?"bg-white hover:bg-slate-50":"bg-amber-50 hover:bg-amber-100"}`}
+              >
+                <div className="h-24 overflow-hidden flex items-center justify-center">
+                  <img src={thumb} alt={label} className="h-24 w-auto object-contain select-none pointer-events-none scale-150 origin-center" />
+                </div>
+                <div className="mt-0.5 text-xs font-medium text-slate-800">{label}</div>
+                <div className="mt-0.5 text-[10px] font-medium text-slate-600">{isOwned? (active?"Selected":"Use") : ( isPremium ? `Buy ${price}` : "Locked" )}</div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
