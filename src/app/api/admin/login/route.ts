@@ -14,7 +14,10 @@ export async function POST(req: NextRequest) {
     const admin = await db.collection('admins').findOne({ email: lower });
     if (admin && verifyPassword(String(pass || ''), admin.salt, admin.hash)) {
       const guard = (typeof CFG_AUTH === "string" && CFG_AUTH.length ? CFG_AUTH : undefined) || process.env.AUTH_SECRET || "dev";
-      (await cookies()).set("admin_session", guard, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 8 });
+      if (process.env.NODE_ENV === 'production' && (!guard || guard === 'dev')) {
+        return Response.json({ success: false, message: "Server misconfigured" }, { status: 503 });
+      }
+      (await cookies()).set("admin_session", guard, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: "lax", path: "/", maxAge: 60 * 60 * 8 });
       return Response.json({ success: true });
     }
   } catch {}
@@ -23,6 +26,9 @@ export async function POST(req: NextRequest) {
   const ok = lower === String(process.env.ADMIN_USER || '').toLowerCase() && pass === process.env.ADMIN_PASS;
   if (!ok) return Response.json({ success: false, message: "Email/password salah" }, { status: 401 });
   const guard = (typeof CFG_AUTH === "string" && CFG_AUTH.length ? CFG_AUTH : undefined) || process.env.AUTH_SECRET || "dev";
-  (await cookies()).set("admin_session", guard, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 8 });
+  if (process.env.NODE_ENV === 'production' && (!guard || guard === 'dev')) {
+    return Response.json({ success: false, message: "Server misconfigured" }, { status: 503 });
+  }
+  (await cookies()).set("admin_session", guard, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: "lax", path: "/", maxAge: 60 * 60 * 8 });
   return Response.json({ success: true });
 }

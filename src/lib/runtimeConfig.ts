@@ -11,7 +11,9 @@ export const MONGODB_URI = ""; // e.g., mongodb+srv://user:pass@cluster/...
 export const MONGO_TIMEOUT_MS = 8000;
 export const MONGO_DIRECT = false;
 
-export const AUTH_SECRET = "dev"; // admin guard secret; replace in production
+// Admin guard secret; MUST be set to a strong random string in production (via ENV or here).
+// Using the default in production will be blocked by middleware.
+export const AUTH_SECRET = process.env.NODE_ENV === "production" ? "" : "dev";
 
 export const MIDTRANS_SERVER_KEY = "";
 export const MIDTRANS_CLIENT_KEY = "";
@@ -21,9 +23,9 @@ export const VCGAMERS_API_KEY = "";
 export const VCGAMERS_SECRET_KEY = "";
 export const VCGAMERS_SANDBOX = true;
 
-// Xendit
-export const XENDIT_SECRET_KEY = "xnd_development_7liXQJWUZo49BvnjYhzKoa5MlqJ44e1yvqjNmzHcZftdYbLcyWUzVGoYL5018"; // e.g., xnd_development_...
-export const XENDIT_PUBLIC_KEY = "xnd_public_development_2pD186YL0boCsW69gP6tZJzXrdgWeqBPPCCLvaRmZO1It2lr8eF5vJDHqdRqcsd"; // optional
+// Xendit (do NOT hardcode real keys in repo). Leave blank to use process.env or DB settings.
+export const XENDIT_SECRET_KEY = ""; // e.g., xnd_development_...
+export const XENDIT_PUBLIC_KEY = ""; // optional
 export const XENDIT_IS_PRODUCTION = false;
 
 // Moota

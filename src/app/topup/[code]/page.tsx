@@ -23,7 +23,6 @@ export default async function TopupPage({ params }: { params: Promise<{ code: st
           code={product.code}
           price={product?.variants?.find((v: any) => (v.isActive ?? true) !== false)?.price || 10000}
           variants={Array.isArray(product?.variants) ? product.variants : undefined}
-          hidePaymentMethods
         />
       </div>
     </main>

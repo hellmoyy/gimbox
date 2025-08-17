@@ -26,6 +26,19 @@ export default async function SettingsPage() {
         </div>
 
         <div className="grid gap-2">
+          <h2 className="font-semibold mt-2">Otomatisasi Sync</h2>
+          <div className="text-xs text-slate-500">Atur token dan provider yang akan disinkronkan oleh cronjob.</div>
+          <input name="sync_token" defaultValue={s.sync_token || ""} placeholder="Cron Sync Token (wajib untuk endpoint /api/admin/sync/cron)" className="border border-slate-300 rounded px-3 py-2 text-slate-900 placeholder-slate-400 bg-[#fefefe]" />
+          <input name="sync_providers" defaultValue={s.sync_providers || "vcgamers"} placeholder="Provider disinkron (comma/space separated), contoh: vcgamers digiflazz iak" className="border border-slate-300 rounded px-3 py-2 text-slate-900 placeholder-slate-400 bg-[#fefefe]" />
+          <div className="text-xs text-slate-500">
+            Endpoint: <code className="bg-slate-100 px-1 rounded">/api/admin/sync/cron?token=TOKEN</code> • Pakai di cron scheduler (GitHub Actions, UptimeRobot, EasyCron, dst).
+          </div>
+          {s.sync_lastRunAt && (
+            <div className="text-xs text-slate-600">Terakhir jalan: {new Date(s.sync_lastRunAt).toLocaleString()} • Hasil: {Array.isArray(s.sync_lastResult) ? s.sync_lastResult.map((r: any) => `${r.provider}:${r.count ?? (r.error ? 'err' : 0)}`).join(", ") : '-'}</div>
+          )}
+        </div>
+
+        <div className="grid gap-2">
           <h2 className="font-semibold mt-2">Provider</h2>
           <input name="digiflazz_username" defaultValue={s.digiflazz_username || ""} placeholder="Digiflazz Username" className="border border-slate-300 rounded px-3 py-2 text-slate-900 placeholder-slate-400 bg-[#fefefe]" />
           <input name="digiflazz_api_key" defaultValue={s.digiflazz_api_key || ""} placeholder="Digiflazz API Key" className="border border-slate-300 rounded px-3 py-2 text-slate-900 placeholder-slate-400 bg-[#fefefe]" />

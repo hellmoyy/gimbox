@@ -31,11 +31,16 @@ export async function POST(req: NextRequest) {
     await fs.mkdir(destDir, { recursive: true });
 
     if (isSvg) {
-      // Pass-through SVG without rasterizing
-      const buf = Buffer.from(await file.arrayBuffer());
+      // Sanitize SVG: remove scripts and on* event handlers to prevent XSS
+      const raw = Buffer.from(await file.arrayBuffer()).toString("utf8");
+      const sanitized = raw
+        .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+        .replace(/on[a-zA-Z]+\s*=\s*"[^"]*"/g, "")
+        .replace(/on[a-zA-Z]+\s*=\s*'[^']*'/g, "")
+        .replace(/on[a-zA-Z]+\s*=\s*[^\s>]+/g, "");
       const fileName = `${(safeBase || "image")}-${uniq}.svg`;
       const destPath = path.join(destDir, fileName);
-      await fs.writeFile(destPath, buf);
+      await fs.writeFile(destPath, Buffer.from(sanitized, "utf8"));
       const url = `/images/uploads/${folder}/${fileName}`;
       return Response.json({ url });
     }

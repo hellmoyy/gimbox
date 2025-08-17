@@ -39,8 +39,24 @@ export async function POST(req: NextRequest) {
   const provider: string = body?.provider || "digiflazz"; // default current flow
   const buyPrice: number | null = typeof body?.buyPrice === "number" ? body.buyPrice : null;
   const adminFee: number = typeof body?.adminFee === "number" ? body.adminFee : 0;
-  const gatewayFee: number = typeof body?.gatewayFee === "number" ? body.gatewayFee : 0;
+  // Determine base price from variant (preferred) or fallback to provided price
+  const basePrice: number = typeof variantPrice === 'number' ? Number(variantPrice) : Number(price || 0);
+  // Derive gateway fee on server based on Active Payments config using base price
+  let gatewayFee = 0;
+  try {
+    const db = await getDb();
+    const ap = await db.collection("settings").findOne({ key: "gateway:active_payments" });
+    const items = Array.isArray(ap?.value?.items) ? ap!.value.items : [];
+    const pick = items.find((it: any) => String(it.gateway).toLowerCase() === gateway && String(it.method).toLowerCase() === method.toLowerCase() && it.enabled !== false);
+    if (pick) {
+      const feeType = pick.feeType === 'percent' ? 'percent' : 'flat';
+      const feeValue = typeof pick.feeValue === 'number' ? pick.feeValue : Number(pick.feeValue || 0) || 0;
+      const base = Number(basePrice || 0);
+      gatewayFee = feeType === 'percent' ? Math.round((base * feeValue) / 100) : Math.round(feeValue);
+    }
+  } catch {}
   const otherFee: number = typeof body?.otherFee === "number" ? body.otherFee : 0;
+  const totalSellPrice = Math.max(0, Number(basePrice) + Number(gatewayFee));
 
   // 1. Order ke Digiflazz (dummy, bisa diaktifkan)
   const sign = getSignature(USERNAME!, API_KEY!, code, userId);
@@ -90,7 +106,7 @@ export async function POST(req: NextRequest) {
         userId,
         email,
         nominal,
-        sellPrice: price,
+        sellPrice: totalSellPrice,
         buyPrice,
         fees: { admin: adminFee, gateway: gatewayFee, other: otherFee, total: Number(adminFee + gatewayFee + otherFee) },
         details,
@@ -115,11 +131,11 @@ export async function POST(req: NextRequest) {
         const cfg = await getXenditConfig();
         if (!cfg.enabled) throw new Error("Xendit disabled");
         if (String(method).toLowerCase().includes("qris")) {
-          const q = await xenditCreateQris({ referenceId: orderId, amount: price || 0 });
+          const q = await xenditCreateQris({ referenceId: orderId, amount: totalSellPrice || 0 });
           details = { qrCodeUrl: q?.qr_string ? `https://api.qrserver.com/v1/create-qr-code/?size=184x184&data=${encodeURIComponent(q.qr_string)}` : undefined, xendit: { qrisId: q?.id, qrString: q?.qr_string } };
         } else {
           // Default to VA BCA
-          const v = await xenditCreateVaBca({ externalId: orderId, name: email || "Customer", expectedAmount: price || undefined });
+          const v = await xenditCreateVaBca({ externalId: orderId, name: email || "Customer", expectedAmount: totalSellPrice || undefined });
           details = { bankName: "BCA", accountNumber: v?.account_number, accountHolder: email || "Customer", xendit: { vaId: v?.id } };
         }
       } catch {
@@ -138,7 +154,7 @@ export async function POST(req: NextRequest) {
         userId,
         email,
         nominal,
-        sellPrice: price,
+        sellPrice: totalSellPrice,
         buyPrice,
         fees: { admin: adminFee, gateway: gatewayFee, other: otherFee, total: Number(adminFee + gatewayFee + otherFee) },
         details,
@@ -189,7 +205,7 @@ export async function POST(req: NextRequest) {
   const midtransPayload: any = {
     transaction_details: {
       order_id: digiflazzPayload.order_id,
-      gross_amount: price || 10000,
+      gross_amount: totalSellPrice || 10000,
     },
     customer_details: { email },
   };
@@ -224,7 +240,7 @@ export async function POST(req: NextRequest) {
       userId,
       email,
       nominal,
-      sellPrice: price,
+      sellPrice: totalSellPrice,
       buyPrice,
       fees: { admin: adminFee, gateway: gatewayFee, other: otherFee, total: Number(adminFee + gatewayFee + otherFee) },
       snapToken,

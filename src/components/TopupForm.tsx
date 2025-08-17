@@ -40,6 +40,18 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   const lastChosenKindRef = useRef<'qris' | 'emoney' | 'va' | 'transfer' | ''>('');
   const formRef = useRef<HTMLFormElement | null>(null);
 
+  // Derive current gateway fee based on Active Payments config; fallback to methodFees map
+  const computeGatewayFee = (base: number) => {
+    const ap = activePaymentsUI.find((it) => it && it.enabled !== false && it.gateway === selectedGateway && it.method === selectedMethod);
+    if (ap) {
+      const feeType = ap.feeType === 'percent' ? 'percent' : 'flat';
+      const feeValue = typeof ap.feeValue === 'number' ? ap.feeValue : Number(ap.feeValue || 0) || 0;
+      return feeType === 'percent' ? Math.round(base * (feeValue / 100)) : Math.round(feeValue);
+    }
+    const fallback = Number(methodFees[selectedMethod] || 0);
+    return isFinite(fallback) ? Math.round(fallback) : 0;
+  };
+
   const activeVariantsAll = useMemo(() => (variants || []).filter(v => (v.isActive ?? true) !== false), [variants]);
   const activeVariants = useMemo(() => {
     // Only apply region filtering for MLBB post-validation
@@ -94,6 +106,24 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   const { data: session } = useSession();
   const sessionEmail = (session as any)?.user?.email as string | undefined;
   const [showLogin, setShowLogin] = useState(false);
+
+  // Restore MLBB draft (userId/serverId) after login redirect
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      if (code !== 'mlbb') return;
+      const key = `topup:draft:${code}`;
+      const raw = sessionStorage.getItem(key);
+      if (raw) {
+        const data = JSON.parse(raw || '{}');
+        if (typeof data?.userId === 'string') setUserIdInput(String(data.userId));
+        if (typeof data?.serverId === 'string') setServerIdInput(String(data.serverId));
+        sessionStorage.removeItem(key);
+      }
+    } catch {}
+  // run only once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Load available gateways for user selection
   useEffect(() => {
     (async () => {
@@ -103,13 +133,17 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
         const list: Array<{ name: string; enabled: boolean; methods: string[] }> = Array.isArray(j?.data) ? j.data : [];
         const enabledList = list.filter((g) => g.enabled);
         setGateways(enabledList);
-        if (enabledList.length) {
-          setSelectedGateway(enabledList[0].name);
-          setSelectedMethod(enabledList[0].methods?.[0] || "");
-        }
   // Load ordered Active Payments from API response
   const aps: Array<any> = Array.isArray(j?.activePayments) ? j.activePayments : [];
   setActivePaymentsUI(aps);
+        // Prefer default from Active Payments if available; fallback to first enabled gateway method
+        if (aps.length > 0) {
+          setSelectedGateway(aps[0].gateway);
+          setSelectedMethod(aps[0].method);
+        } else if (enabledList.length) {
+          setSelectedGateway(enabledList[0].name);
+          setSelectedMethod(enabledList[0].methods?.[0] || "");
+        }
         // Also fetch method fees
         try {
           const rf = await fetch('/api/gateways/fees', { cache: 'no-store' });
@@ -139,11 +173,18 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   function beginPayment() {
     // If not logged in, show login prompt
     if (!sessionEmail) {
+      // Persist current MLBB inputs so they survive the OAuth redirect
+      try {
+        if (typeof window !== 'undefined' && code === 'mlbb') {
+          const key = `topup:draft:${code}`;
+          sessionStorage.setItem(key, JSON.stringify({ userId: userIdInput, serverId: serverIdInput, ts: Date.now() }));
+        }
+      } catch {}
       setShowLogin(true);
       return;
     }
-    // Open method selection modal
-    setShowMethodModal(true);
+    // Directly submit and go to invoice
+    formRef.current?.requestSubmit();
   }
 
   function methodToKind(method: string): 'qris' | 'emoney' | 'va' | 'transfer' {
@@ -155,13 +196,12 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
     return 'va';
   }
 
-  function chooseActivePaymentAndPay(item: { gateway: string; method: string }) {
+  function chooseActivePayment(item: { gateway: string; method: string }) {
     const kind = methodToKind(item.method);
     lastChosenKindRef.current = kind;
     setSelectedGateway(item.gateway);
     setSelectedMethod(item.method);
     setShowMethodModal(false);
-    formRef.current?.requestSubmit();
   }
 
   // removed sub-VA chooser; Midtrans UI will present bank choices
@@ -331,15 +371,17 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
     const combinedUserId = serverId && code === "mlbb" ? `${inputUserId}(${serverId})` : inputUserId;
 
   const chosenVariant = activeVariants[selectedIndex] || activeVariants[cheapestIndex] || null;
+  const base = (selectedPrice ?? 0);
+  const gwFee = computeGatewayFee(base);
   const data: any = {
       code,
       userId: combinedUserId,
       email: sessionEmail,
       nominal: form.nominal.value,
-  // Include gateway fee into final price
-  price: (selectedPrice ?? 0) + (selectedGateway === 'midtrans' ? Number(methodFees[selectedMethod] || 0) : 0),
+  // Include gateway fee into final price for all gateways
+  price: base + gwFee,
   // Pass through fee breakdown for storage/analysis
-  gatewayFee: selectedGateway === 'midtrans' ? Number(methodFees[selectedMethod] || 0) : 0,
+  gatewayFee: gwFee,
       productCode: code,
       productLabel: code,
       variantLabel: chosenVariant?.label || null,
@@ -571,51 +613,56 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
         </div>
       )}
 
-  {/* Payment method selection (hidden on topup page when hidePaymentMethods is true) */}
-  {!hidePaymentMethods && gateways.length > 0 && (
-        <div className="rounded-lg border p-3">
-          <div className="text-sm font-semibold text-slate-900 mb-1">Metode Pembayaran</div>
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap gap-3 text-sm">
-              {gateways.map((g) => (
-                <label key={g.name} className="inline-flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="gateway"
-                    checked={selectedGateway === g.name}
-                    onChange={() => {
-                      setSelectedGateway(g.name);
-                      setSelectedMethod(g.methods?.[0] || "");
-                    }}
-                  />
-                  <span className="capitalize text-slate-900 font-medium">{g.name}</span>
-                </label>
-              ))}
-            </div>
-            {gateways.find((g) => g.name === selectedGateway)?.methods?.length ? (
-              <div className="text-xs text-slate-700">
-                <div className="mb-1 font-medium text-slate-900">Opsi:</div>
-                <div className="flex flex-wrap gap-3">
-                  {gateways
-                    .find((g) => g.name === selectedGateway)!
-                    .methods.map((m) => (
-                      <label key={m} className="inline-flex items-center gap-2">
-                        <input type="radio" name="method" checked={selectedMethod === m} onChange={() => setSelectedMethod(m)} />
-                        <span className="text-slate-900 font-medium">{m}</span>
-                      </label>
-                    ))}
+  {/* Payment method selector (compact, like variant) */}
+  {!hidePaymentMethods && (
+        <div>
+          <div className="mb-2 text-sm font-medium text-slate-700">Metode Pembayaran</div>
+          {(() => {
+            const apList = activePaymentsUI.filter((ap) => ap && ap.enabled !== false);
+            const current = apList.find((ap) => ap.gateway === selectedGateway && ap.method === selectedMethod) || apList[0] || null;
+            const kind = current ? methodToKind(current.method) : methodToKind(selectedMethod || '');
+            const fallbackIcon = kind === 'transfer' ? '/images/iconpayment/bank.png' : kind === 'va' ? '/images/iconpayment/va.png' : '/images/iconpayment/qris.png';
+            const base = selectedPrice ?? 0;
+            const fee = current
+              ? (current.feeType === 'percent' ? Math.round(base * (Number(current.feeValue || 0) / 100)) : Math.round(Number(current.feeValue || 0)))
+              : Math.round(Number(methodFees[selectedMethod] || 0));
+            const total = base + (isFinite(fee) ? fee : 0);
+            const label = current ? (current.label || `${current.gateway}/${current.method}`) : (selectedMethod || 'Pilih metode');
+            return (
+              <button
+                type="button"
+                onClick={() => setShowMethodModal(true)}
+                className={`w-full rounded-lg border px-3 py-3 text-left transition shadow-sm bg-white border-slate-300 hover:border-slate-400`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <img src={current?.logoUrl || fallbackIcon} alt={label} className="w-9 h-9 object-contain" />
+                    <div>
+                      <div className="text-[15px] font-semibold text-slate-900 leading-tight mb-0 truncate">{label}</div>
+                      <div className="text-xs text-slate-600 mt-0">
+                        {selectedPrice != null ? (
+                          <span>Total: <span className="text-blue-600 font-bold text-[13px]">Rp {Number(total).toLocaleString()}</span></span>
+                        ) : (
+                          <span>Pilih paket lebih dulu</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-xs font-medium text-blue-700">Ubah ▾</span>
                 </div>
-              </div>
-            ) : null}
-          </div>
+              </button>
+            );
+          })()}
         </div>
       )}
 
       {/* Summary & Submit */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-slate-600">
-          {selectedPrice ? (
-            <>Total: <span className="font-semibold text-slate-900">Rp {selectedPrice.toLocaleString()}</span></>
+          {selectedPrice != null ? (
+            (() => { const fee = computeGatewayFee(selectedPrice || 0); const total = (selectedPrice || 0) + fee; return (<>
+              Total: <span className="font-semibold text-slate-900">Rp {Number(total).toLocaleString()}</span>
+            </>); })()
           ) : (
             <>Pilih paket untuk melihat total</>
           )}
@@ -632,7 +679,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
             </svg>
           )}
-          {loading ? "Memproses…" : "Pembayaran"}
+          {loading ? "Memproses…" : "Beli sekarang"}
         </button>
       </div>
 
@@ -705,7 +752,9 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[12px] text-slate-700 min-w-[96px] text-right">{selectedPrice != null ? `Rp ${Number(selectedPrice).toLocaleString()}` : '—'}</span>
+                    <span className="text-[12px] text-slate-700 min-w-[120px] text-right">
+                      {selectedPrice != null ? (() => { const fee = computeGatewayFee(selectedPrice || 0); const total = (selectedPrice || 0) + fee; return `Rp ${Number(total).toLocaleString()}`; })() : '—'}
+                    </span>
                     {(() => {
                       const canUse = (walletBalance ?? -1) >= (selectedPrice ?? Number.POSITIVE_INFINITY);
                       if (canUse) {
@@ -766,7 +815,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                           const total = base + fee;
                           const rec = (typeof window !== 'undefined') ? ((window as any).__apRecommended === ap.id) : false;
                           return (
-                            <button key={ap.id} type="button" onClick={() => chooseActivePaymentAndPay(ap)} className="w-full bg-white hover:bg-slate-50">
+                            <button key={ap.id} type="button" onClick={() => chooseActivePayment(ap)} className="w-full bg-white hover:bg-slate-50">
                               <div className="flex items-center justify-between gap-2 px-3 py-2.5 text-[13px]">
                                 <span className="flex items-center gap-2 min-w-0">
                                   <img src={ap.logoUrl || fallbackIcon} alt={ap.label} className="object-contain" style={{ width: 28, height: 28 }} />
@@ -809,8 +858,8 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                           const total = base + fee;
                           const rec = (typeof window !== 'undefined') ? ((window as any).__apRecommended === ap.id) : false;
                           return (
-                            <button key={ap.id} type="button" onClick={() => chooseActivePaymentAndPay(ap)} className="w-full bg-white hover:bg-slate-50">
-                              <div className="flex items-center justify-between gap-2 px-3 py-2.5 text-[13px]">
+                            <button key={ap.id} type="button" onClick={() => chooseActivePayment(ap)} className="w-full">
+                              <div className="w-full rounded-lg border px-3 py-3 text-left transition shadow-sm bg-white border-slate-300 hover:border-slate-400 flex items-center justify-between gap-2 text-[13px]">
                                 <span className="flex items-center gap-2 min-w-0">
                                   <img src={ap.logoUrl || fallbackIcon} alt={ap.label} className="object-contain" style={{ width: 28, height: 28 }} />
                                   <span className="truncate text-left text-slate-900 font-medium">{ap.label || `${ap.gateway}/${ap.method}`}</span>
@@ -847,7 +896,15 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
               <button
                 type="button"
                 className="flex-1 inline-flex items-center justify-center gap-2 bg-[#0d6efd] hover:bg-[#0b5ed7] text-white rounded px-4 py-2 font-semibold"
-                onClick={() => signIn('google', { callbackUrl: typeof window !== 'undefined' ? window.location.href : '/' })}
+                onClick={() => {
+                  try {
+                    if (typeof window !== 'undefined' && code === 'mlbb') {
+                      const key = `topup:draft:${code}`;
+                      sessionStorage.setItem(key, JSON.stringify({ userId: userIdInput, serverId: serverIdInput, ts: Date.now() }));
+                  }
+                  } catch {}
+                  signIn('google', { callbackUrl: typeof window !== 'undefined' ? window.location.href : '/' });
+                }}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-5 h-5">
                   <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12 s5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C33.046,6.053,28.757,4,24,4C12.955,4,4,12.955,4,24 s8.955,20,20,20s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>

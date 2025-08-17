@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 
     const gateway = String(order.paymentGateway || "").toLowerCase();
 
-    const fees = (order as any).fees || {};
+  const fees = (order as any).fees || {};
     const feesTotal = Number(fees.total || 0);
     const feesGateway = Number(fees.gateway || 0);
     const feesAdmin = Number(fees.admin || 0);
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    if (gateway === "xendit") {
+  if (gateway === "xendit") {
       const d = (order as any).details || {};
       // Minimal placeholder: return method and amount; UI will handle QR dummy if needed
       return NextResponse.json({
