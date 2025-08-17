@@ -25,6 +25,11 @@ body {
   font-family: var(--font-rajdhani), system-ui, -apple-system, Segoe UI, Roboto, Arial, Helvetica, sans-serif;
 }
 
+/* Use dynamic viewport units to keep layout stable when mobile browser chrome changes */
+html, body {
+  min-height: 100dvh;
+}
+
 /* iOS Safari: prevent input zoom (keep >=16px) and stabilize fixed bottom bar */
 input, select, textarea {
   font-size: 16px; /* avoids iOS zoom */
