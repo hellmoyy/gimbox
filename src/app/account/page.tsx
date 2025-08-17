@@ -153,6 +153,7 @@ export default function AccountPage() {
                 </section>
               </div>
 
+
               {/* Profile Card removed as requested */}
 
               {/* Menus */}
