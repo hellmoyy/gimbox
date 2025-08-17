@@ -52,23 +52,23 @@ export default function BottomNav() {
             );
           })}
 
-      {/* Center Floating Action - GimPlay */}
+  {/* Center Floating Action - GimPet */}
           <div className="absolute left-1/2 -translate-x-1/2 -top-6 flex flex-col items-center">
             <Link
               href="/gamification"
               className={`grid place-items-center w-14 h-14 rounded-full shadow-lg border border-white/30 bg-gradient-to-b from-[#60a5fa] to-[#2563eb] ${
                 pathname === "/gamification" ? "ring-4 ring-[#60a5fa]/30" : ""
               }`}
-              aria-label="GimPlay"
+      aria-label="GimPet"
             >
-              <img src="/images/icon/gg--games.svg" alt="GimPlay" className="w-8 h-8 invert-[1] brightness-0 saturate-0" />
+      <img src="/images/icon/gg--games.svg" alt="GimPet" className="w-8 h-8 invert-[1] brightness-0 saturate-0" />
             </Link>
             <span
               className={`mt-1 text-[13px] font-semibold ${
                 pathname === "/gamification" ? "text-[#0d6efd]" : "text-slate-900"
               }`}
             >
-              GimPlay
+      GimPet
             </span>
           </div>
         </div>
