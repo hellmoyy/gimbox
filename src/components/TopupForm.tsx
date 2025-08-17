@@ -873,8 +873,8 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                           const total = base + fee;
                           const rec = (typeof window !== 'undefined') ? ((window as any).__apRecommended === ap.id) : false;
                           return (
-                            <button key={ap.id} type="button" onClick={() => chooseActivePayment(ap)} className="w-full">
-                              <div className="w-full rounded-lg border px-3 py-3 text-left transition shadow-sm bg-white border-slate-300 hover:border-slate-400 flex items-center justify-between gap-2 text-[13px]">
+                            <button key={ap.id} type="button" onClick={() => chooseActivePayment(ap)} className="w-full bg-white hover:bg-slate-50">
+                              <div className="flex items-center justify-between gap-2 px-3 py-2.5 text-[13px]">
                                 <span className="flex items-center gap-2 min-w-0">
                                   <img src={ap.logoUrl || fallbackIcon} alt={ap.label} className="object-contain" style={{ width: 28, height: 28 }} />
                                   <span className="truncate text-left text-slate-900 font-medium">{ap.label || `${ap.gateway}/${ap.method}`}</span>
