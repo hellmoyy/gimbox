@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
+import type { UpdateFilter } from "mongodb";
 import { getToken } from "next-auth/jwt";
+
+type TicketMessage = {
+  author: "user" | "admin";
+  email?: string;
+  text: string;
+  createdAt: Date;
+};
+
+type TicketDoc = {
+  ticketId: string;
+  email: string;
+  status: string;
+  updatedAt: Date;
+  messages: TicketMessage[];
+};
 
 export async function GET(req: NextRequest, { params }: { params: { ticketId: string } }) {
   try {
@@ -8,8 +24,9 @@ export async function GET(req: NextRequest, { params }: { params: { ticketId: st
     const token = await getToken({ req, secret });
     if (!token || !token.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const email = String(token.email).toLowerCase();
-    const db = await getDb();
-    const row = await db.collection("tickets").findOne({ ticketId: params.ticketId, email }, { projection: { _id: 0 } });
+  const db = await getDb();
+  const tickets = db.collection<TicketDoc>("tickets");
+  const row = await tickets.findOne({ ticketId: params.ticketId, email }, { projection: { _id: 0 } });
     if (!row) return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
     return NextResponse.json({ success: true, ticket: row });
   } catch (e: any) {
@@ -28,10 +45,12 @@ export async function POST(req: NextRequest, { params }: { params: { ticketId: s
     if (!message) return NextResponse.json({ success: false, error: "Pesan wajib." }, { status: 400 });
     const now = new Date();
     const db = await getDb();
-    const res = await db.collection("tickets").updateOne(
-      { ticketId: params.ticketId, email },
-      { $push: { messages: { author: "user", email, text: message, createdAt: now } }, $set: { updatedAt: now, status: "open" } }
-    );
+    const tickets = db.collection<TicketDoc>("tickets");
+    const update: UpdateFilter<TicketDoc> = {
+      $push: { messages: { author: "user", email, text: message, createdAt: now } },
+      $set: { updatedAt: now, status: "open" },
+    };
+    const res = await tickets.updateOne({ ticketId: params.ticketId, email }, update);
     if (!res.matchedCount) return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (e: any) {

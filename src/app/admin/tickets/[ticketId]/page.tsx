@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { AUTH_SECRET as CFG_AUTH } from "@/lib/runtimeConfig";
-import ClientBox from "./reply.client";
+import ClientBox from "./ReplyClient";
 
 async function getTicket(ticketId: string) {
   const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/admin/tickets/${ticketId}`, { cache: 'no-store' });

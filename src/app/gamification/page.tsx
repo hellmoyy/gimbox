@@ -1,3 +1,8 @@
+import GimPlayHeader from "../../components/GimPlayHeader";
+import GimPlayRanking from "../../components/GimPlayRanking";
+// Note: GimPlayPet lives on /gamification/pet; this page links to it.
+import GimPlayHero from "../../components/GimPlayHero";
+
 export default async function GamificationPage() {
   // Placeholder data; later wire to real loyalty backend
   const points = 0;
@@ -5,10 +10,17 @@ export default async function GamificationPage() {
   const streak = 0;
 
   return (
-    <main className="min-h-screen pb-28">
+    <main className="min-h-screen pb-28 bg-[linear-gradient(180deg,#ecf2ff,#fff)]">
       <div className="mx-auto max-w-md px-4 pt-6">
-        <h1 className="text-xl font-semibold text-slate-900">Gamification</h1>
-        <p className="text-slate-600 mt-1">Kumpulkan point, naik level, dan dapatkan hadiah.</p>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold text-slate-900">GimPlay</h1>
+          <GimPlayHeader />
+        </div>
+        <p className="text-slate-600 mt-1">Main game ringan, kumpulkan point, dan ikuti turnamen.</p>
+
+        <div className="mt-4">
+          <GimPlayHero />
+        </div>
 
         <div className="grid grid-cols-2 gap-3 mt-5">
           <div className="rounded-xl border border-slate-200 bg-[#fefefe] p-4">
@@ -32,6 +44,12 @@ export default async function GamificationPage() {
             </ul>
           </div>
         </div>
+
+
+
+  {/* Buka GimPet CTA removed as requested */}
+
+        <GimPlayRanking />
 
         <div className="mt-6 rounded-xl border border-slate-200 bg-[#fefefe] p-4">
           <div className="font-semibold text-slate-900">Cara kerja</div>
