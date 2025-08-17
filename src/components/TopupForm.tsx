@@ -39,6 +39,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   const [methodFees, setMethodFees] = useState<Record<string, number>>({});
   const lastChosenKindRef = useRef<'qris' | 'emoney' | 'va' | 'transfer' | ''>('');
   const formRef = useRef<HTMLFormElement | null>(null);
+  const [showPageLoading, setShowPageLoading] = useState(false);
 
   // Derive current gateway fee based on Active Payments config; fallback to methodFees map
   const computeGatewayFee = (base: number) => {
@@ -183,8 +184,8 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
       setShowLogin(true);
       return;
     }
-    // Directly submit and go to invoice
-    formRef.current?.requestSubmit();
+  // Just submit; overlay is handled in onSubmit after validation passes
+  formRef.current?.requestSubmit();
   }
 
   function methodToKind(method: string): 'qris' | 'emoney' | 'va' | 'transfer' {
@@ -328,6 +329,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
         if (!uidOk || !sidOk) {
           setLoading(false);
           setValidation({ ok: false, text: 'Format ID tidak valid' });
+          setShowPageLoading(false);
           return;
         }
         if (uid && sid && !validatedName) {
@@ -343,6 +345,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
             setValidatedName("");
             setValidatedRegion("");
             setValidation({ ok: false, text: j?.error || "Username tidak valid" });
+            setShowPageLoading(false);
             return;
           }
           if (j?.username) setValidatedName(j.username);
@@ -354,6 +357,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
       } catch {
         setLoading(false);
         setValidation({ ok: false, text: "Gagal memeriksa User ID, coba lagi." });
+        setShowPageLoading(false);
         return;
       }
     }
@@ -362,6 +366,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
     if (!sessionEmail) {
       setLoading(false);
       setShowLogin(true);
+  setShowPageLoading(false);
       return;
     }
 
@@ -390,14 +395,28 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   if (selectedGateway) data.gateway = selectedGateway;
   if (selectedMethod) data.method = selectedMethod;
 
-    const res = await fetch("/api/order", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const result = await res.json();
+    let result: any = {};
+    try {
+      setShowPageLoading(true);
+      const res = await fetch("/api/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      result = await res.json();
+    } catch (err) {
+      setShowPageLoading(false);
+      setLoading(false);
+      setMessage("Gagal membuat order. Coba lagi.");
+      return;
+    }
     setLoading(false);
-    setMessage(result.message || "");
+    // Don't show success banner; only show errors when they occur
+    if (!result?.orderId && result?.message && result?.success === false) {
+      setMessage(result.message);
+    } else {
+      setMessage("");
+    }
     if (result.snapToken) setSnapToken(result.snapToken);
     if (result.snapRedirectUrl) setSnapUrl(result.snapRedirectUrl);
     if (result.midtransClientKey) setMidtransClientKey(result.midtransClientKey);
@@ -409,6 +428,8 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
       window.location.href = `/payment-instructions/${encodeURIComponent(result.orderId)}${q}`;
       return;
     }
+  // When not redirecting, hide overlay
+  setShowPageLoading(false);
 
     // Midtrans Snap popup integration (preferred over redirect)
   if (false && result.snapToken && selectedGateway === "midtrans") {
@@ -436,7 +457,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   }
 
   return (
-    <form ref={formRef} className="bg-[#fefefe] rounded-xl border border-slate-200 shadow p-5 flex flex-col gap-4" onSubmit={handleSubmit}>
+  <form ref={formRef} className="bg-[#fefefe] rounded-xl border border-slate-200 shadow p-5 flex flex-col gap-4" onSubmit={handleSubmit}>
       {/* Game ID input */}
       {code === "mlbb" ? (
         <div className="grid grid-cols-2 gap-3">
@@ -670,20 +691,14 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
         <button
           type="button"
           className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded px-4 py-2 font-semibold"
-          disabled={loading || (activeVariants.length > 0 && selectedIndex < 0)}
+          disabled={showPageLoading || (activeVariants.length > 0 && selectedIndex < 0)}
           onClick={beginPayment}
         >
-          {loading && (
-            <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-            </svg>
-          )}
-          {loading ? "Memproses…" : "Beli sekarang"}
+          Beli sekarang
         </button>
       </div>
 
-      {message && <div className="mt-2 text-green-600 text-center">{message}</div>}
+  {message && <div className="mt-2 text-red-600 text-center">{message}</div>}
       {/* Payment Method Modal */}
       {showMethodModal && (
         <div className="fixed inset-0 z-[95]">
@@ -915,6 +930,28 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                 Masuk dengan Google
               </button>
               <button type="button" className="px-4 py-2 rounded border border-slate-300 text-slate-700" onClick={() => setShowLogin(false)}>Batal</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Page overlay loading (preview: 5s) */}
+      {showPageLoading && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="relative z-10 flex flex-col items-center gap-3">
+            <div className="relative w-16 h-16">
+              {/* static ring */}
+              <div className="absolute inset-0 rounded-full border-4 border-white/30" />
+              {/* animated ring */}
+              <div className="absolute inset-0 rounded-full border-4 border-[#0d6efd] border-t-transparent animate-spin" />
+              {/* center logo */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/logo/logo128.png"
+                alt="Loading"
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 object-contain rounded"
+              />
             </div>
           </div>
         </div>

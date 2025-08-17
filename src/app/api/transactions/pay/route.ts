@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     const db = await getDb();
     const order = await db.collection("orders").findOne(
       { orderId, email },
-      { projection: { _id: 0, orderId: 1, email: 1, status: 1, paymentGateway: 1, method: 1, sellPrice: 1, details: 1, snapToken: 1, snapRedirectUrl: 1, fees: 1, productCode: 1, productLabel: 1, variantLabel: 1, variantPrice: 1 } }
+      { projection: { _id: 0, orderId: 1, email: 1, status: 1, paymentGateway: 1, method: 1, sellPrice: 1, details: 1, snapToken: 1, snapRedirectUrl: 1, fees: 1, productCode: 1, productLabel: 1, variantLabel: 1, variantPrice: 1, createdAt: 1, updatedAt: 1 } }
     );
     if (!order) {
       return NextResponse.json({ success: false, message: "Order tidak ditemukan" }, { status: 404 });
@@ -29,6 +29,15 @@ export async function GET(req: NextRequest) {
 
     const statusStr = String(order.status || "").toLowerCase();
   const isPending = ["pending", "waiting_payment", "unpaid"].includes(statusStr);
+  const createdAt = order?.createdAt ? new Date(order.createdAt) : new Date();
+  const expiresAt = new Date(createdAt.getTime() + 5 * 60 * 1000); // 5 minutes expiry
+    const now = new Date();
+    if (isPending && now > expiresAt) {
+      try {
+        await db.collection("orders").updateOne({ orderId, email }, { $set: { status: "expired", updatedAt: new Date() } });
+      } catch {}
+      return NextResponse.json({ success: true, status: "expired", method: order.method, amount: order.sellPrice, expiresAt: expiresAt.toISOString(), productCode: (order as any).productCode, productLabel: (order as any).productLabel, variantLabel: (order as any).variantLabel, variantPrice: (order as any).variantPrice });
+    }
 
     const gateway = String(order.paymentGateway || "").toLowerCase();
 
@@ -43,7 +52,7 @@ export async function GET(req: NextRequest) {
 
     // If already paid, return success summary for instruction page
     if (!isPending) {
-      return NextResponse.json({ success: true, status: "success", method: order.method, amount: order.sellPrice, feesTotal, feesGateway, feesAdmin, feesOther, baseAmount, feePercent, productCode: (order as any).productCode, productLabel: (order as any).productLabel, variantLabel: (order as any).variantLabel, variantPrice: (order as any).variantPrice });
+      return NextResponse.json({ success: true, status: statusStr === 'expired' ? 'expired' : 'success', method: order.method, amount: order.sellPrice, feesTotal, feesGateway, feesAdmin, feesOther, baseAmount, feePercent, productCode: (order as any).productCode, productLabel: (order as any).productLabel, variantLabel: (order as any).variantLabel, variantPrice: (order as any).variantPrice, expiresAt: expiresAt.toISOString() });
     }
 
     // Build instruction payload per gateway
@@ -68,6 +77,7 @@ export async function GET(req: NextRequest) {
         accountNumber: d.accountNumber || "1234567890",
         accountHolder: d.accountHolder || "PT Contoh",
         qrCodeUrl: d.qrCodeUrl || undefined,
+        expiresAt: expiresAt.toISOString(),
       });
     }
 
@@ -93,6 +103,7 @@ export async function GET(req: NextRequest) {
         accountNumber: d.accountNumber || "5775458264",
         accountHolder: d.accountHolder || "Helmi Andito Purnama",
         qrCodeUrl: d.qrCodeUrl || undefined,
+        expiresAt: expiresAt.toISOString(),
       });
     }
 
@@ -122,6 +133,7 @@ export async function GET(req: NextRequest) {
   feesAdmin,
   feesOther,
   feePercent,
+      expiresAt: expiresAt.toISOString(),
     });
   } catch (e: any) {
     const message = e?.message || "Unexpected error";

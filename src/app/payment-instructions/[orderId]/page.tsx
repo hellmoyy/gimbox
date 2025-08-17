@@ -37,6 +37,16 @@ function computeUniqueAmount(base?: number, orderId?: string) {
   return { amountWithCode: amount + codeNum, code: codeNum };
 }
 
+function formatDuration(ms: number) {
+  if (!ms || ms <= 0) return "00:00:00";
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+
 // Very simple dummy QR generator (SVG data URL) for demo purposes
 function buildDummyQrDataUrl(text: string) {
   const size = 184;
@@ -70,14 +80,17 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
   const [error, setError] = useState("");
   const [poll, setPoll] = useState(true);
   const [intentMethod, setIntentMethod] = useState<string>("");
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [remainingMs, setRemainingMs] = useState<number>(0);
 
   async function load() {
     setError("");
     try {
       const res = await fetch(`/api/transactions/pay?orderId=${encodeURIComponent(orderId)}`, { cache: "no-store" });
-      const data = await res.json();
+  const data = await res.json();
       if (!res.ok) throw new Error(data?.message || data?.error || "Gagal mengambil data pembayaran");
-      setPayment(data);
+  setPayment(data);
+  if (data?.expiresAt) setExpiresAt(String(data.expiresAt));
     } catch (e: any) {
       setError(e?.message || "Gagal mengambil data pembayaran");
     } finally {
@@ -86,6 +99,19 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
   }
 
   useEffect(() => { setLoading(true); load(); }, [orderId]);
+  // countdown tick
+  useEffect(() => {
+    if (!expiresAt) return;
+    const tick = () => {
+      const now = Date.now();
+      const end = new Date(expiresAt).getTime();
+      const left = Math.max(0, end - now);
+      setRemainingMs(left);
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [expiresAt]);
   useEffect(() => {
     try {
       const search = typeof window !== 'undefined' ? window.location.search : '';
@@ -156,7 +182,8 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
   if (!payment) return null;
 
   const isSuccess = payment.status === "paid" || payment.status === "success";
-  const isPending = payment.status === "pending";
+  const isExpired = payment.status === "expired" || (expiresAt && remainingMs <= 0 && !isSuccess);
+  const isPending = payment.status === "pending" && !isExpired;
 
   return (
     <main className="min-h-screen pb-24">
@@ -171,19 +198,24 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
         {isSuccess ? (
           <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-green-700 text-sm">Pembayaran berhasil. Terima kasih!</div>
         ) : isPending ? (
-          <div className="mb-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-yellow-700 text-sm">Menunggu pembayaran. Ikuti instruksi di bawah ini.</div>
+          <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-blue-700 text-sm flex items-center justify-between">
+            <span>Halaman ini akan diperbaharui ketika pembayaran selesai</span>
+            {expiresAt && (
+              <span className="text-[11px] text-blue-700/80">Sisa waktu: {formatDuration(remainingMs)}</span>
+            )}
+          </div>
+        ) : isExpired ? (
+          <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700 text-sm">Masa berlaku invoice telah berakhir. Transaksi dianggap batal.</div>
         ) : null}
 
         {/* Rincian Card (moved above payment card) */}
         <div className="rounded-xl border border-slate-200 bg-[#fefefe] overflow-hidden mb-3">
           <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-            <div className="text-sm font-semibold text-slate-900">
-              Rincian{payment.productLabel ? ` • ${payment.productLabel}` : ''}{payment.variantLabel ? ` • ${payment.variantLabel}` : ''}
-            </div>
+            <div className="text-sm font-semibold text-slate-900">Pembelian Anda</div>
           </div>
           <div className="p-4">
             <div className="text-sm text-slate-700 flex items-center justify-between">
-              <span>Belanja</span>
+              <span>{payment?.variantLabel || payment?.productLabel || 'Belanja'}</span>
               <span className="font-semibold">{formatRupiah(Number(payment.baseAmount ?? 0) || 0)}</span>
             </div>
             <div className="text-sm text-slate-700 flex items-center justify-between mt-1">
@@ -227,6 +259,11 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
                 <div className="text-2xl">✅</div>
                 <div className="mt-2 text-slate-800">Pembayaran Anda sudah diterima.</div>
               </div>
+            ) : isExpired ? (
+              <div className="text-center py-6">
+                <div className="text-2xl">⌛</div>
+                <div className="mt-2 text-slate-800">Invoice sudah kadaluarsa. Silakan buat pesanan baru.</div>
+              </div>
             ) : (
               <>
                 {/* Bank Transfer with unique code (Moota) */}
@@ -241,22 +278,129 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
                 )}
 
                 {/* QRIS */}
-        {methodNorm === "qris" && (
-                  <div className="text-center">
-                    <div className="mb-2 text-sm text-slate-700">Scan QR untuk membayar:</div>
-                    <div className="inline-flex p-2 rounded-lg border border-slate-200 bg-white">
-                      <img
-                        src={payment.qrCodeUrl || buildDummyQrDataUrl(`${orderId}-${amountWithCode}`)}
-                        alt="QR Code"
-                        className="w-44 h-44 object-contain"
-                      />
+                {methodNorm === "qris" && !isExpired && (() => {
+                  // Use gateway QR when available; otherwise, show a real-looking QR generated from an EMV-style payload
+                  const sampleEmv = '00020101021226690012ID.CO.QRIS.WWW0118936009SAMPLE0001020703123456720141234567890303UMI5204000053033605404500005802ID5909MERCHANT6007JAKARTA62110303ABC6304ABCD';
+                  const sampleUrl = `https://api.qrserver.com/v1/create-qr-code/?size=440x440&data=${encodeURIComponent(sampleEmv)}`;
+                  const qrSrc = payment.qrCodeUrl || sampleUrl;
+                  async function downloadQr() {
+                    const filename = `qr-${orderId}.jpg`;
+                    try {
+                      // Load image (data URL or remote) with CORS friendly settings
+                      const img = new Image();
+                      img.crossOrigin = 'anonymous';
+                      const loaded = await new Promise<HTMLImageElement>((resolve, reject) => {
+                        img.onload = () => resolve(img);
+                        img.onerror = reject;
+                        img.src = qrSrc;
+                      });
+                      // Load Gimbox logo (same-origin)
+                      const logoImg = new Image();
+                      logoImg.crossOrigin = 'anonymous';
+                      const logoLoaded = await new Promise<HTMLImageElement>((resolve, reject) => {
+                        logoImg.onload = () => resolve(logoImg);
+                        logoImg.onerror = reject;
+                        logoImg.src = '/images/logo/logo128.png';
+                      });
+                      // Draw onto canvas and export as JPG
+                      const size = 512;
+                      const canvas = document.createElement('canvas');
+                      canvas.width = size;
+                      canvas.height = size;
+                      const ctx = canvas.getContext('2d');
+                      if (!ctx) throw new Error('no-canvas');
+                      function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+                        const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+                        ctx.beginPath();
+                        ctx.moveTo(x + rr, y);
+                        ctx.lineTo(x + w - rr, y);
+                        ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+                        ctx.lineTo(x + w, y + h - rr);
+                        ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+                        ctx.lineTo(x + rr, y + h);
+                        ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+                        ctx.lineTo(x, y + rr);
+                        ctx.quadraticCurveTo(x, y, x + rr, y);
+                        ctx.closePath();
+                      }
+                      ctx.imageSmoothingEnabled = false;
+                      // Fill white background (QRs often have transparency)
+                      ctx.fillStyle = '#ffffff';
+                      ctx.fillRect(0, 0, size, size);
+                      const w = loaded.naturalWidth || size;
+                      const h = loaded.naturalHeight || size;
+                      const scale = Math.min(size / w, size / h);
+                      const dw = Math.max(1, Math.round(w * scale));
+                      const dh = Math.max(1, Math.round(h * scale));
+                      const dx = Math.floor((size - dw) / 2);
+                      const dy = Math.floor((size - dh) / 2);
+                      ctx.drawImage(loaded, dx, dy, dw, dh);
+                      // Overlay center logo with white box behind (reduced padding) and small radius
+                      const logoBoxSize = Math.round(size * 0.26); // ~26% of QR size
+                      const logoPad = Math.round(logoBoxSize * 0.06); // reduced padding
+                      const totalBox = logoBoxSize + logoPad * 2;
+                      const cx = Math.floor(size / 2);
+                      const cy = Math.floor(size / 2);
+                      const boxX = Math.floor(cx - totalBox / 2);
+                      const boxY = Math.floor(cy - totalBox / 2);
+                      // White background box with rounded corners
+                      ctx.fillStyle = '#ffffff';
+                      const radius = Math.max(6, Math.round(totalBox * 0.08));
+                      roundedRectPath(ctx, boxX, boxY, totalBox, totalBox, radius);
+                      ctx.fill();
+                      // Draw the logo centered
+                      const logoX = Math.floor(cx - logoBoxSize / 2);
+                      const logoY = Math.floor(cy - logoBoxSize / 2);
+                      ctx.imageSmoothingEnabled = true;
+                      ctx.drawImage(logoLoaded, logoX, logoY, logoBoxSize, logoBoxSize);
+                      const blob: Blob = await new Promise((resolve, reject) => {
+                        try {
+                          canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob-null')), 'image/jpeg', 0.92);
+                        } catch (e) {
+                          reject(e);
+                        }
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = filename;
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                      URL.revokeObjectURL(url);
+                      return;
+                    } catch {
+                      // Likely CORS-tainted canvas; fallback to opening original image
+                      try { window.open(qrSrc, '_blank', 'noopener'); } catch {}
+                    }
+                  }
+                  return (
+                    <div className="text-center">
+                      <div className="mb-2 text-sm text-slate-700">Scan QR untuk membayar:</div>
+                      <div className="inline-flex p-2 rounded-lg border border-slate-200 bg-white">
+                        <div className="relative w-44 h-44">
+                          <img
+                            src={qrSrc}
+                            alt="QR Code"
+                            className="w-44 h-44 object-contain"
+                          />
+                          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                            <div className="flex items-center justify-center bg-white/95 rounded-lg" style={{ width: 50, height: 50 }}>
+                              <img src="/images/logo/logo128.png" alt="Gimbox" className="w-11 h-11 object-contain" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-2">
+                        <button type="button" onClick={downloadQr} className="text-xs px-2 py-1 rounded bg-[#0d6efd] text-white hover:bg-[#0b5ed7]">Simpan QR</button>
+                      </div>
+                      <div className="mt-2 text-sm text-slate-700">Nominal: <span className="font-semibold text-slate-900">{formatRupiah(payment.amount)}</span></div>
                     </div>
-          <div className="mt-2 text-sm text-slate-700">Nominal: <span className="font-semibold text-slate-900">{formatRupiah(payment.amount)}</span></div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* E-money */}
-                {methodNorm === "emoney" && (
+                {methodNorm === "emoney" && !isExpired && (
                   <div>
                     <div className="text-sm text-slate-700">Bayar menggunakan dompet digital:</div>
                     <ul className="mt-2 grid grid-cols-2 gap-2 text-sm text-slate-800">
@@ -277,7 +421,7 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
                 )}
 
                 {/* Virtual Account list (dummy) */}
-                {methodNorm === "va" && (
+                {methodNorm === "va" && !isExpired && (
                   <div className="space-y-2">
                     <InfoRow label="VA BCA" value="32093023923920" copy />
                     <InfoRow label="VA BNI" value="43948394834893" copy />
