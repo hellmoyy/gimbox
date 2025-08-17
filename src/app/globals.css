@@ -36,6 +36,15 @@ input, select, textarea {
   font-size: 16px; /* avoids iOS zoom */
 }
 
+/* Darker placeholder color for better readability */
+::placeholder {
+  color: #9aa3b2; /* slightly darker than default */
+}
+input::placeholder,
+textarea::placeholder {
+  color: #9aa3b2;
+}
+
 :root {
   padding-bottom: env(safe-area-inset-bottom);
 }
