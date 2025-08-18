@@ -4,7 +4,7 @@ import DeleteButton from "@/components/admin/DeleteButton";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminProducts() {
+export default async function AdminProducts({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
   let items: any[] = [];
   try {
     const db = await getDb();
@@ -26,18 +26,23 @@ export default async function AdminProducts() {
     );
   }
 
+  const imported = typeof searchParams?.imported === "string" ? Number(searchParams!.imported) : 0;
+  const provider = typeof searchParams?.provider === "string" ? searchParams!.provider : undefined;
   return (
     <div className="w-full">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Produk</h1>
         <div className="flex items-center gap-2">
           <Link href="/admin/products/[id]" as="/admin/products/new" className="bg-green-600 text-white px-3 py-2 rounded">Tambah</Link>
+          <Link href="/admin/products/import-new" className="bg-emerald-600 text-white px-3 py-2 rounded">Import Produk Baru</Link>
           <Link href="/admin/products/sync" className="bg-indigo-600 text-white px-3 py-2 rounded">Sync Harga dari Provider</Link>
-          <form action="/api/admin/products/seed-local" method="post">
-            <button className="bg-slate-700 text-white px-3 py-2 rounded" title="Seed dari data lokal">Seed Lokal</button>
-          </form>
         </div>
       </div>
+      {imported > 0 ? (
+        <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 px-4 py-2">
+          Berhasil import {imported} produk baru{provider ? ` dari ${provider}` : ""}.
+        </div>
+      ) : null}
       <div className="rounded-xl border overflow-x-auto w-full">
         <table className="min-w-full w-full table-auto text-sm text-slate-800">
           <thead>
