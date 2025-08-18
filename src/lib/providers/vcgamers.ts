@@ -19,11 +19,19 @@ export type VCGOrderResponse = {
 };
 
 function baseUrl() {
+  const override = (process.env.VCGAMERS_BASE_URL || "").trim();
+  if (override) return override.replace(/\/$/, "");
   const sandbox = typeof CFG_SANDBOX === "boolean" ? CFG_SANDBOX : process.env.VCGAMERS_SANDBOX === "true";
-  // TODO: Verify base URLs from official docs
-  return sandbox
-    ? "https://sandbox-api.vcgamers.com"
-    : "https://api.vcgamers.com";
+  // Defaults (can be overridden with VCGAMERS_BASE_URL)
+  return sandbox ? "https://sandbox-api.vcgamers.com" : "https://api.vcgamers.com";
+}
+
+function pathPriceList() {
+  return (process.env.VCGAMERS_PRICELIST_PATH || "/v1/pricelist").trim();
+}
+
+function pathBalance() {
+  return (process.env.VCGAMERS_BALANCE_PATH || "/v1/balance").trim();
 }
 
 function getKeys() {
@@ -43,7 +51,7 @@ export function signPayload(payload: any) {
 export async function getPriceList(): Promise<Array<{ code: string; name: string; cost: number; icon?: string; category?: string }>> {
   try {
     const { apiKey } = getKeys();
-    const url = baseUrl() + "/v1/pricelist"; // TODO: confirm path
+  const url = baseUrl() + pathPriceList();
     const res = await fetch(url, {
       method: "GET",
       headers: {
@@ -53,8 +61,11 @@ export async function getPriceList(): Promise<Array<{ code: string; name: string
       // Next.js fetch cache control: always revalidate on request from admin sync
       cache: "no-store",
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status} ${text?.slice(0,180)}`);
+    }
+    const data = await res.json().catch(() => ({}));
     // TODO: map fields according to docs
     const items = Array.isArray(data?.data) ? data.data : [];
     return items.map((it: any) => ({
@@ -123,7 +134,7 @@ export async function getOrderStatus(orderId: string): Promise<VCGOrderResponse>
 export async function getBalance(): Promise<{ success: boolean; balance?: number; message?: string }> {
   try {
     const { apiKey } = getKeys();
-    const url = baseUrl() + "/v1/balance"; // TODO: confirm path
+  const url = baseUrl() + pathBalance();
     const res = await fetch(url, {
       method: "GET",
       headers: {
@@ -132,8 +143,15 @@ export async function getBalance(): Promise<{ success: boolean; balance?: number
       },
       cache: "no-store",
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { success: false, message: data?.message || `HTTP ${res.status}` };
+    const text = await res.text().catch(() => "");
+    if (!res.ok) {
+      // Try parse JSON then fallback to text snippet
+      let message = `HTTP ${res.status}`;
+      try { const j = JSON.parse(text || "{}"); message = j?.message || message; } catch {}
+      if (!message || message.startsWith("HTTP")) message = `${message} ${text?.slice(0,180)}`.trim();
+      return { success: false, message };
+    }
+    const data = JSON.parse(text || "{}") as any;
     const bal = Number(data?.data?.balance ?? data?.balance ?? 0);
     return { success: true, balance: bal };
   } catch (e: any) {
