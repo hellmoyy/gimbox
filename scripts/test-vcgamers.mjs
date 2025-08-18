@@ -7,6 +7,38 @@
 
 /* eslint-disable no-console */
 
+// Lightweight .env loader for Node scripts (supports .env.local and .env)
+import fs from 'fs';
+import path from 'path';
+
+function loadDotEnvFiles() {
+  const root = process.cwd();
+  const files = [
+    path.join(root, '.env.local'),
+    path.join(root, '.env'),
+  ];
+  for (const file of files) {
+    try {
+      if (!fs.existsSync(file)) continue;
+      const content = fs.readFileSync(file, 'utf8');
+      for (const line of content.split(/\r?\n/)) {
+        if (!line || /^\s*#/.test(line)) continue;
+        const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+        if (!m) continue;
+        const key = m[1];
+        let val = m[2];
+        // Trim surrounding quotes
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (!(key in process.env)) process.env[key] = val;
+      }
+    } catch {}
+  }
+}
+
+loadDotEnvFiles();
+
 const TIMEOUT_MS = Number(process.env.TIMEOUT_MS || 15000);
 
 function env(name, def = "") {
@@ -34,7 +66,7 @@ function candidatesPricelist() {
 
 function authHeaders() {
   const apiKey = env("VCGAMERS_API_KEY");
-  if (!apiKey) throw new Error("Set VCGAMERS_API_KEY in env");
+  if (!apiKey) throw new Error("Set VCGAMERS_API_KEY in env or .env.local");
   return {
     "Content-Type": "application/json",
     Accept: "application/json",
