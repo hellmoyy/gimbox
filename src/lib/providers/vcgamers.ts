@@ -51,32 +51,52 @@ export function signPayload(payload: any) {
 export async function getPriceList(): Promise<Array<{ code: string; name: string; cost: number; icon?: string; category?: string }>> {
   try {
     const { apiKey } = getKeys();
-  const url = baseUrl() + pathPriceList();
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      // Next.js fetch cache control: always revalidate on request from admin sync
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status} ${text?.slice(0,180)}`);
+    const candidates = Array.from(new Set([
+      pathPriceList(),
+      "/v2/pricelist",
+      "/v2/products/pricelist",
+      "/v2/product/pricelist",
+      "/v1/pricelist",
+    ]));
+    const tried: string[] = [];
+    for (const p of candidates) {
+      const url = baseUrl() + p;
+      tried.push(p);
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        cache: "no-store",
+      }).catch((e: any) => {
+        console.warn("[vcgamers] pricelist fetch error", p, e?.message || e);
+        return undefined as any;
+      });
+      if (!res) continue;
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        console.warn("[vcgamers] pricelist HTTP", res.status, p, txt?.slice(0,120) || "");
+        continue;
+      }
+      const data = await res.json().catch(() => ({}));
+      const items = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+      if (Array.isArray(items) && items.length >= 0) {
+        return items.map((it: any) => ({
+          code: String(it.code || it.sku || it.product_code || ""),
+          name: String(it.name || it.product_name || it.title || ""),
+          cost: Number(it.price || it.cost || 0),
+          icon: it.icon || it.image,
+          category: it.category,
+        }));
+      }
     }
-    const data = await res.json().catch(() => ({}));
-    // TODO: map fields according to docs
-    const items = Array.isArray(data?.data) ? data.data : [];
-    return items.map((it: any) => ({
-      code: String(it.code || it.sku || it.product_code || ""),
-      name: String(it.name || it.product_name || it.title || ""),
-      cost: Number(it.price || it.cost || 0),
-      icon: it.icon || it.image,
-      category: it.category,
-    }));
+    console.warn("[vcgamers] pricelist: all candidate paths failed", tried);
+    return [];
   } catch (e) {
-    console.warn("[vcgamers] getPriceList error:", (e as any)?.message || e);
+  const err: any = e;
+  const code = err?.code || err?.cause?.code || "";
+  console.warn("[vcgamers] getPriceList error:", err?.message || err, code);
     // Fallback: return empty so sync can continue
     return [];
   }
@@ -134,29 +154,41 @@ export async function getOrderStatus(orderId: string): Promise<VCGOrderResponse>
 export async function getBalance(): Promise<{ success: boolean; balance?: number; message?: string }> {
   try {
     const { apiKey } = getKeys();
-  const url = baseUrl() + pathBalance();
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      cache: "no-store",
-    });
-    const text = await res.text().catch(() => "");
-    if (!res.ok) {
-      // Try parse JSON then fallback to text snippet
-      let message = `HTTP ${res.status}`;
-      try { const j = JSON.parse(text || "{}"); message = j?.message || message; } catch {}
-      if (!message || message.startsWith("HTTP")) message = `${message} ${text?.slice(0,180)}`.trim();
-      return { success: false, message };
+    const candidates = Array.from(new Set([
+      pathBalance(),
+      "/v2/balance",
+      "/v2/wallet/balance",
+      "/v1/balance",
+    ]));
+    const errors: string[] = [];
+    for (const p of candidates) {
+      const url = baseUrl() + p;
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        cache: "no-store",
+      }).catch((e: any) => {
+        errors.push(`${p}: ${e?.message || e}`);
+        return undefined as any;
+      });
+      if (!res) continue;
+      const text = await res.text().catch(() => "");
+      if (!res.ok) {
+        errors.push(`${p}: HTTP ${res.status} ${(text||'').slice(0,120)}`);
+        continue;
+      }
+      const data = JSON.parse(text || "{}") as any;
+      const bal = Number(data?.data?.balance ?? data?.balance ?? 0);
+      return { success: true, balance: bal };
     }
-    const data = JSON.parse(text || "{}") as any;
-    const bal = Number(data?.data?.balance ?? data?.balance ?? 0);
-    return { success: true, balance: bal };
+    return { success: false, message: `All paths failed: ${errors.join(" | ")}` };
   } catch (e: any) {
-    const msg = e?.message || "Request error";
-    console.warn("[vcgamers] getBalance error:", msg);
+  const code = e?.code || e?.cause?.code || "";
+  const msg = [e?.message || "Request error", code].filter(Boolean).join(" ");
+  console.warn("[vcgamers] getBalance error:", msg);
     // Common: missing keys
     if (/missing/i.test(msg) || /key/i.test(msg)) {
       return { success: false, message: "VCGamers API key/secret belum dikonfigurasi" };
