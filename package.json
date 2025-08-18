@@ -12,7 +12,8 @@
     "start": "next start",
     "lint": "next lint",
     "images:convert": "node scripts/convert-webp-to-jpg.js",
-    "images:download": "node scripts/download-assets.js"
+  "images:download": "node scripts/download-assets.js",
+  "vcg:test": "node scripts/test-vcgamers.mjs"
   },
   "dependencies": {
     "axios": "^1.11.0",
