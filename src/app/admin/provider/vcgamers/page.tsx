@@ -35,9 +35,9 @@ export default function AdminVCGamersPage() {
       const res = await fetch(`/api/admin/provider/vcgamers/balance`, { cache: "no-store" });
       const data = await res.json();
       if (data?.success) setBalance(new Intl.NumberFormat("id-ID").format(data.balance || 0));
-      else setBalance("Gagal");
-    } catch {
-      setBalance("Error");
+      else setBalance(data?.message ? `Gagal: ${data.message}` : "Gagal");
+    } catch (e: any) {
+      setBalance(`Error: ${e?.message || 'unknown'}`);
     }
   }
 

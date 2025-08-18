@@ -41,9 +41,9 @@ export function signPayload(payload: any) {
 }
 
 export async function getPriceList(): Promise<Array<{ code: string; name: string; cost: number; icon?: string; category?: string }>> {
-  const { apiKey } = getKeys();
-  const url = baseUrl() + "/v1/pricelist"; // TODO: confirm path
   try {
+    const { apiKey } = getKeys();
+    const url = baseUrl() + "/v1/pricelist"; // TODO: confirm path
     const res = await fetch(url, {
       method: "GET",
       headers: {
@@ -65,6 +65,7 @@ export async function getPriceList(): Promise<Array<{ code: string; name: string
       category: it.category,
     }));
   } catch (e) {
+    console.warn("[vcgamers] getPriceList error:", (e as any)?.message || e);
     // Fallback: return empty so sync can continue
     return [];
   }
@@ -120,9 +121,9 @@ export async function getOrderStatus(orderId: string): Promise<VCGOrderResponse>
 }
 
 export async function getBalance(): Promise<{ success: boolean; balance?: number; message?: string }> {
-  const { apiKey } = getKeys();
-  const url = baseUrl() + "/v1/balance"; // TODO: confirm path
   try {
+    const { apiKey } = getKeys();
+    const url = baseUrl() + "/v1/balance"; // TODO: confirm path
     const res = await fetch(url, {
       method: "GET",
       headers: {
@@ -136,7 +137,13 @@ export async function getBalance(): Promise<{ success: boolean; balance?: number
     const bal = Number(data?.data?.balance ?? data?.balance ?? 0);
     return { success: true, balance: bal };
   } catch (e: any) {
-    return { success: false, message: e.message };
+    const msg = e?.message || "Request error";
+    console.warn("[vcgamers] getBalance error:", msg);
+    // Common: missing keys
+    if (/missing/i.test(msg) || /key/i.test(msg)) {
+      return { success: false, message: "VCGamers API key/secret belum dikonfigurasi" };
+    }
+    return { success: false, message: msg };
   }
 }
 
