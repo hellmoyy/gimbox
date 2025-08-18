@@ -1,5 +1,6 @@
-export default function ImportNewProductsPage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
-  const err = typeof searchParams?.error === "string" ? searchParams!.error : "";
+export default async function ImportNewProductsPage({ searchParams }: { searchParams: Promise<any> }) {
+  const sp = await searchParams;
+  const err = typeof sp?.error === "string" ? sp.error : "";
   return (
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-3xl mx-auto bg-[#fefefe] rounded-xl shadow border p-6">

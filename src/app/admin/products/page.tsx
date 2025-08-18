@@ -4,7 +4,7 @@ import DeleteButton from "@/components/admin/DeleteButton";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminProducts({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
+export default async function AdminProducts({ searchParams }: { searchParams: Promise<any> }) {
   let items: any[] = [];
   try {
     const db = await getDb();
@@ -26,8 +26,9 @@ export default async function AdminProducts({ searchParams }: { searchParams?: {
     );
   }
 
-  const imported = typeof searchParams?.imported === "string" ? Number(searchParams!.imported) : 0;
-  const provider = typeof searchParams?.provider === "string" ? searchParams!.provider : undefined;
+  const sp = await searchParams;
+  const imported = typeof sp?.imported === "string" ? Number(sp.imported) : 0;
+  const provider = typeof sp?.provider === "string" ? sp.provider : undefined;
   return (
     <div className="w-full">
       <div className="flex items-center justify-between mb-4">
