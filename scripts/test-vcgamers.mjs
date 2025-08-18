@@ -10,6 +10,7 @@
 // Lightweight .env loader for Node scripts (supports .env.local and .env)
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 
 function loadDotEnvFiles() {
   const root = process.cwd();
@@ -129,12 +130,91 @@ async function probe(category, paths) {
   }
 }
 
+function getSecretOrNull() {
+  const v = env('VCGAMERS_SECRET_KEY');
+  return v && v.length ? v : null;
+}
+
+function makeSignatures(secret, path, body, ts) {
+  const candidatesRaw = [
+    body,
+    ts,
+    body + ts,
+    ts + body,
+    path + ts + body,
+    path + body + ts,
+  ].map((s) => (typeof s === 'string' ? s : JSON.stringify(s)));
+  const sigs = Array.from(new Set(candidatesRaw.map((p) => crypto.createHmac('sha256', secret).update(p || '').digest('hex'))));
+  return sigs;
+}
+
+async function probeSignedPublicBalance() {
+  const secret = getSecretOrNull();
+  const apiKey = env('VCGAMERS_API_KEY');
+  const b = baseUrl();
+  const p = '/v1/public/balance';
+  const url = b + p;
+  console.log(`\n== SIGNED PUBLIC BALANCE POST ==`);
+  console.log('Base:', b);
+  if (!secret) {
+    console.log('Skip: VCGAMERS_SECRET_KEY not set');
+    return;
+  }
+  if (!apiKey) {
+    console.log('Skip: VCGAMERS_API_KEY not set');
+    return;
+  }
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const bodies = [
+    {},
+    { timestamp: ts },
+  ];
+  const headerNameVariants = ['X-Signature', 'Signature'];
+  const includeTimestampHeader = [false, true];
+  for (const body of bodies) {
+    const payload = JSON.stringify(body);
+    const sigs = makeSignatures(secret, p, payload, ts);
+    for (const sig of sigs.slice(0, 6)) { // limit attempts per body
+      for (const signHeader of headerNameVariants) {
+        for (const withTs of includeTimestampHeader) {
+          const headersBase = [
+            { name: 'POST-X-Api-Key', headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey } },
+            { name: 'POST-Bearer', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` } },
+          ];
+          for (const hb of headersBase) {
+            const headers = { ...hb.headers, [signHeader]: sig };
+            if (withTs) headers['X-Timestamp'] = ts;
+            console.log(`\nPOST ${url} [${hb.name} + ${signHeader}${withTs ? ' + X-Timestamp' : ''}] body=${JSON.stringify(body)}`);
+            const r = await fetchWithTimeout(url, { method: 'POST', headers, body: payload, cache: 'no-store' });
+            if (r.error) {
+              console.log(`ERROR after ${r.ms}ms ->`, r.error.name || 'Error', r.error.code || '', r.error.message || r.error);
+              continue;
+            }
+            console.log(`STATUS ${r.status} in ${r.ms}ms`);
+            if (!r.ok) {
+              console.log('Body:', preview(r.body));
+              continue;
+            }
+            console.log('OK:', preview(r.body));
+            return;
+          }
+        }
+      }
+    }
+  }
+}
+
 async function main() {
   console.log("VCGamers diagnostics starting...");
   try {
     await probe("balance", candidatesBalance());
   } catch (e) {
     console.log("Balance probe error:", e?.message || e);
+  }
+  try {
+    await probeSignedPublicBalance();
+  } catch (e) {
+    console.log("Signed balance probe error:", e?.message || e);
   }
   try {
     await probe("pricelist", candidatesPricelist());

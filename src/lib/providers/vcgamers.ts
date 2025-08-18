@@ -58,6 +58,12 @@ function getApiKey() {
   return apiKey;
 }
 
+function getSecret() {
+  const secret = (typeof CFG_SECRET === "string" && CFG_SECRET.length ? CFG_SECRET : undefined) || process.env.VCGAMERS_SECRET_KEY || "";
+  if (!secret) throw new Error("VCGAMERS secret key missing in env");
+  return secret;
+}
+
 export function signPayload(payload: any) {
   const { secret } = getKeys();
   const body = typeof payload === "string" ? payload : JSON.stringify(payload);
@@ -178,19 +184,62 @@ export async function getOrderStatus(orderId: string): Promise<VCGOrderResponse>
 export async function getBalance(): Promise<{ success: boolean; balance?: number; message?: string }> {
   try {
     const apiKey = getApiKey();
+    const bases = candidateBaseUrls();
+    const errors: string[] = [];
+
+    // 1) Try signed POST to /v1/public/balance (Mitra API)
+    try {
+      const secret = getSecret();
+      const body = {} as any;
+      const payload = JSON.stringify(body);
+      const signature = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+      for (const b of bases) {
+        const url = b + "/v1/public/balance";
+        const attempts = [
+          { name: "POST-X-Api-Key+X-Signature", headers: { "Content-Type": "application/json", "X-Api-Key": apiKey, "X-Signature": signature } },
+          { name: "POST-Bearer+X-Signature", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, "X-Signature": signature } },
+        ];
+        for (const a of attempts) {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: a.headers as any,
+            body: payload,
+            cache: "no-store",
+          }).catch((e: any) => {
+            errors.push(`${url}#${a.name}: ${e?.message || e}`);
+            return undefined as any;
+          });
+          if (!res) continue;
+          const text = await res.text().catch(() => "");
+          if (!res.ok) {
+            errors.push(`${url}#${a.name}: HTTP ${res.status} ${(text||'').slice(0,120)}`);
+            continue;
+          }
+          const data = JSON.parse(text || "{}") as any;
+          const bal = Number(data?.data?.balance ?? data?.balance ?? 0);
+          if (!Number.isNaN(bal)) return { success: true, balance: bal };
+        }
+      }
+    } catch (e: any) {
+      // Missing secret is fine; we'll fallback to GET attempts
+      if (/missing/i.test(String(e?.message))) {
+        errors.push("secret missing: skip signed POST path");
+      } else {
+        errors.push(`signed POST error: ${e?.message || e}`);
+      }
+    }
+
+    // 2) Fallback: GET on various paths and headers
     const paths = Array.from(new Set([
       pathBalance(),
-      "/v1/public/balance",
       "/v2/balance",
       "/v2/wallet/balance",
       "/v1/balance",
     ]));
-    const bases = candidateBaseUrls();
     const headerVariants = [
       { name: "Bearer", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` } },
       { name: "X-Api-Key", headers: { "Content-Type": "application/json", "X-Api-Key": apiKey } },
     ];
-    const errors: string[] = [];
     for (const b of bases) {
       for (const p of paths) {
         for (const hv of headerVariants) {
