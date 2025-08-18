@@ -19,6 +19,7 @@ const nextConfig: NextConfig = {
     // there are ESLint errors. Useful for CI/CD like Railway.
     ignoreDuringBuilds: true,
   },
+  output: 'standalone',
   async headers() {
     return [
       {
