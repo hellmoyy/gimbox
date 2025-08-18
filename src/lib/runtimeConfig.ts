@@ -32,3 +32,13 @@ export const XENDIT_IS_PRODUCTION = false;
 export const MOOTA_API_KEY = ""; // set via ENV or settings; sandbox key supported
 export const MOOTA_IS_SANDBOX = true;
 export const MOOTA_WEBHOOK_TOKEN = ""; // optional: set to verify incoming webhook via header
+
+// Feature flags
+// Enable/disable the Gamification (GimPet/GimPlay) feature globally.
+// Can be overridden via NEXT_PUBLIC_GAMIFICATION_ENABLED env ("true"/"false").
+export const GAMIFICATION_ENABLED: boolean = (() => {
+	const v = (process.env.NEXT_PUBLIC_GAMIFICATION_ENABLED || "").toLowerCase().trim();
+	if (v === "true") return true;
+	if (v === "false") return false;
+	return true; // default ON
+})();

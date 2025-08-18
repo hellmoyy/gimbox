@@ -20,6 +20,14 @@ export default async function SettingsPage() {
       <h1 className="text-2xl font-bold mb-4">Pengaturan</h1>
       <form action="/api/admin/settings" method="post" className="grid gap-4">
         <div className="grid gap-2">
+          <h2 className="font-semibold">Fitur</h2>
+          <label className="inline-flex items-center gap-2">
+            <input type="checkbox" name="gamification_enabled" defaultChecked={s.gamification_enabled === true || s.gamification_enabled === "on" || s.gamification_enabled === "true"} />
+            <span>Aktifkan Gamification (GimPet/GimPlay)</span>
+          </label>
+          <div className="text-xs text-slate-500">Jika dimatikan, menu di bottom nav disembunyikan dan halaman /gamification diblokir.</div>
+        </div>
+        <div className="grid gap-2">
           <h2 className="font-semibold">Payment Gateway</h2>
           <input name="midtrans_server_key" defaultValue={s.midtrans_server_key || ""} placeholder="Midtrans Server Key" className="border border-slate-300 rounded px-3 py-2 text-slate-900 placeholder-slate-400 bg-[#fefefe]" />
           <input name="xendit_secret_key" defaultValue={s.xendit_secret_key || ""} placeholder="Xendit Secret Key" className="border border-slate-300 rounded px-3 py-2 text-slate-900 placeholder-slate-400 bg-[#fefefe]" />
