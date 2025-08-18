@@ -50,28 +50,27 @@ function baseUrl() {
   const override = env("VCGAMERS_BASE_URL").trim();
   if (override) return override.replace(/\/$/, "");
   const sandbox = env("VCGAMERS_SANDBOX").toLowerCase() === "true";
-  return sandbox ? "https://sandbox-api.vcgamers.com" : "https://api.vcgamers.com";
+  return sandbox ? "https://sandbox-api.vcgamers.com" : "https://mitra-api.vcgamers.com";
 }
 
 function candidatesBalance() {
   const p = env("VCGAMERS_BALANCE_PATH") || "/v1/balance";
   // Unique list preserving order
-  return Array.from(new Set([p, "/v2/balance", "/v2/wallet/balance", "/v1/balance"]));
+  return Array.from(new Set([p, "/v1/public/balance", "/v2/balance", "/v2/wallet/balance", "/v1/balance"]));
 }
 
 function candidatesPricelist() {
   const p = env("VCGAMERS_PRICELIST_PATH") || "/v1/pricelist";
-  return Array.from(new Set([p, "/v2/pricelist", "/v2/products/pricelist", "/v2/product/pricelist", "/v1/pricelist"]));
+  return Array.from(new Set([p, "/v1/public/pricelist", "/v2/pricelist", "/v2/products/pricelist", "/v2/product/pricelist", "/v1/pricelist"]));
 }
 
-function authHeaders() {
+function authHeaderVariants() {
   const apiKey = env("VCGAMERS_API_KEY");
   if (!apiKey) throw new Error("Set VCGAMERS_API_KEY in env or .env.local");
-  return {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    Authorization: `Bearer ${apiKey}`,
-  };
+  return [
+    { name: 'Bearer', headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${apiKey}` } },
+    { name: 'X-Api-Key', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Api-Key': apiKey } },
+  ];
 }
 
 async function fetchWithTimeout(url, opts = {}) {
@@ -99,33 +98,33 @@ function preview(str, n = 300) {
 
 async function probe(category, paths) {
   const urlBase = baseUrl();
-  const headers = authHeaders();
   console.log(`\n== ${category.toUpperCase()} CHECKS ==`);
   console.log("Base:", urlBase);
   for (const p of paths) {
     const url = urlBase + p;
-    console.log(`\nGET ${url}`);
-    const r = await fetchWithTimeout(url, { method: "GET", headers, cache: "no-store" });
-    if (r.error) {
-      console.log(`ERROR after ${r.ms}ms ->`, r.error.name || "Error", r.error.code || "", r.error.message || r.error);
-      continue;
-    }
-    console.log(`STATUS ${r.status} in ${r.ms}ms`);
-    if (!r.ok) {
-      console.log("Body:", preview(r.body));
-      continue;
-    }
-    // Try parse
-    let data = null;
-    try { data = JSON.parse(r.body || "{}"); } catch {}
-    if (category === "balance") {
-      const bal = Number(data?.data?.balance ?? data?.balance ?? 0);
-      console.log("Balance:", bal, "Raw:", preview(r.body));
-    } else if (category === "pricelist") {
-      const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
-      console.log("Items:", Array.isArray(list) ? list.length : 0, "Raw:", preview(r.body));
-    } else {
-      console.log("Body:", preview(r.body));
+    for (const hv of authHeaderVariants()) {
+      console.log(`\nGET ${url} [${hv.name}]`);
+      const r = await fetchWithTimeout(url, { method: 'GET', headers: hv.headers, cache: 'no-store' });
+      if (r.error) {
+        console.log(`ERROR after ${r.ms}ms ->`, r.error.name || 'Error', r.error.code || '', r.error.message || r.error);
+        continue;
+      }
+      console.log(`STATUS ${r.status} in ${r.ms}ms`);
+      if (!r.ok) {
+        console.log('Body:', preview(r.body));
+        continue;
+      }
+      let data = null;
+      try { data = JSON.parse(r.body || '{}'); } catch {}
+      if (category === 'balance') {
+        const bal = Number(data?.data?.balance ?? data?.balance ?? 0);
+        console.log('Balance:', bal, 'Raw:', preview(r.body));
+      } else if (category === 'pricelist') {
+        const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+        console.log('Items:', Array.isArray(list) ? list.length : 0, 'Raw:', preview(r.body));
+      } else {
+        console.log('Body:', preview(r.body));
+      }
     }
   }
 }

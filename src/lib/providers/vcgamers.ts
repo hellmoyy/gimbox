@@ -22,8 +22,19 @@ function baseUrl() {
   const override = (process.env.VCGAMERS_BASE_URL || "").trim();
   if (override) return override.replace(/\/$/, "");
   const sandbox = typeof CFG_SANDBOX === "boolean" ? CFG_SANDBOX : process.env.VCGAMERS_SANDBOX === "true";
-  // Defaults (can be overridden with VCGAMERS_BASE_URL)
-  return sandbox ? "https://sandbox-api.vcgamers.com" : "https://api.vcgamers.com";
+  // Prefer Mitra API by default if no override
+  return sandbox ? "https://sandbox-api.vcgamers.com" : "https://mitra-api.vcgamers.com";
+}
+
+function candidateBaseUrls(): string[] {
+  const set = new Set<string>();
+  const primary = baseUrl();
+  if (primary) set.add(primary);
+  // Try common bases as fallbacks
+  set.add("https://mitra-api.vcgamers.com");
+  set.add("https://api.vcgamers.com");
+  set.add("https://sandbox-api.vcgamers.com");
+  return Array.from(set);
 }
 
 function pathPriceList() {
@@ -41,6 +52,12 @@ function getKeys() {
   return { apiKey, secret };
 }
 
+function getApiKey() {
+  const apiKey = (typeof CFG_KEY === "string" && CFG_KEY.length ? CFG_KEY : undefined) || process.env.VCGAMERS_API_KEY || "";
+  if (!apiKey) throw new Error("VCGAMERS api key missing in env");
+  return apiKey;
+}
+
 export function signPayload(payload: any) {
   const { secret } = getKeys();
   const body = typeof payload === "string" ? payload : JSON.stringify(payload);
@@ -50,48 +67,55 @@ export function signPayload(payload: any) {
 
 export async function getPriceList(): Promise<Array<{ code: string; name: string; cost: number; icon?: string; category?: string }>> {
   try {
-    const { apiKey } = getKeys();
-    const candidates = Array.from(new Set([
+    const apiKey = getApiKey();
+    const paths = Array.from(new Set([
       pathPriceList(),
+      "/v1/public/pricelist",
       "/v2/pricelist",
       "/v2/products/pricelist",
       "/v2/product/pricelist",
       "/v1/pricelist",
     ]));
+    const bases = candidateBaseUrls();
+    const headerVariants = [
+      { name: "Bearer", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` } },
+      { name: "X-Api-Key", headers: { "Content-Type": "application/json", "X-Api-Key": apiKey } },
+    ];
     const tried: string[] = [];
-    for (const p of candidates) {
-      const url = baseUrl() + p;
-      tried.push(p);
-      const res = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        cache: "no-store",
-      }).catch((e: any) => {
-        console.warn("[vcgamers] pricelist fetch error", p, e?.message || e);
-        return undefined as any;
-      });
-      if (!res) continue;
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        console.warn("[vcgamers] pricelist HTTP", res.status, p, txt?.slice(0,120) || "");
-        continue;
-      }
-      const data = await res.json().catch(() => ({}));
-      const items = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
-      if (Array.isArray(items) && items.length >= 0) {
-        return items.map((it: any) => ({
-          code: String(it.code || it.sku || it.product_code || ""),
-          name: String(it.name || it.product_name || it.title || ""),
-          cost: Number(it.price || it.cost || 0),
-          icon: it.icon || it.image,
-          category: it.category,
-        }));
+    for (const b of bases) {
+      for (const p of paths) {
+        for (const hv of headerVariants) {
+          const url = b + p;
+          tried.push(`${b}${p}#${hv.name}`);
+          const res = await fetch(url, {
+            method: "GET",
+            headers: hv.headers as any,
+            cache: "no-store",
+          }).catch((e: any) => {
+            console.warn("[vcgamers] pricelist fetch error", url, hv.name, e?.message || e);
+            return undefined as any;
+          });
+          if (!res) continue;
+          if (!res.ok) {
+            const txt = await res.text().catch(() => "");
+            console.warn("[vcgamers] pricelist HTTP", res.status, url, hv.name, txt?.slice(0,120) || "");
+            continue;
+          }
+          const data = await res.json().catch(() => ({}));
+          const items = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+          if (Array.isArray(items)) {
+            return items.map((it: any) => ({
+              code: String(it.code || it.sku || it.product_code || ""),
+              name: String(it.name || it.product_name || it.title || ""),
+              cost: Number(it.price || it.cost || 0),
+              icon: it.icon || it.image,
+              category: it.category,
+            }));
+          }
+        }
       }
     }
-    console.warn("[vcgamers] pricelist: all candidate paths failed", tried);
+    console.warn("[vcgamers] pricelist: all candidate bases/paths/headers failed", tried.slice(0, 10), tried.length);
     return [];
   } catch (e) {
   const err: any = e;
@@ -153,36 +177,43 @@ export async function getOrderStatus(orderId: string): Promise<VCGOrderResponse>
 
 export async function getBalance(): Promise<{ success: boolean; balance?: number; message?: string }> {
   try {
-    const { apiKey } = getKeys();
-    const candidates = Array.from(new Set([
+    const apiKey = getApiKey();
+    const paths = Array.from(new Set([
       pathBalance(),
+      "/v1/public/balance",
       "/v2/balance",
       "/v2/wallet/balance",
       "/v1/balance",
     ]));
+    const bases = candidateBaseUrls();
+    const headerVariants = [
+      { name: "Bearer", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` } },
+      { name: "X-Api-Key", headers: { "Content-Type": "application/json", "X-Api-Key": apiKey } },
+    ];
     const errors: string[] = [];
-    for (const p of candidates) {
-      const url = baseUrl() + p;
-      const res = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        cache: "no-store",
-      }).catch((e: any) => {
-        errors.push(`${p}: ${e?.message || e}`);
-        return undefined as any;
-      });
-      if (!res) continue;
-      const text = await res.text().catch(() => "");
-      if (!res.ok) {
-        errors.push(`${p}: HTTP ${res.status} ${(text||'').slice(0,120)}`);
-        continue;
+    for (const b of bases) {
+      for (const p of paths) {
+        for (const hv of headerVariants) {
+          const url = b + p;
+          const res = await fetch(url, {
+            method: "GET",
+            headers: hv.headers as any,
+            cache: "no-store",
+          }).catch((e: any) => {
+            errors.push(`${b}${p}#${hv.name}: ${e?.message || e}`);
+            return undefined as any;
+          });
+          if (!res) continue;
+          const text = await res.text().catch(() => "");
+          if (!res.ok) {
+            errors.push(`${b}${p}#${hv.name}: HTTP ${res.status} ${(text||'').slice(0,120)}`);
+            continue;
+          }
+          const data = JSON.parse(text || "{}") as any;
+          const bal = Number(data?.data?.balance ?? data?.balance ?? 0);
+          return { success: true, balance: bal };
+        }
       }
-      const data = JSON.parse(text || "{}") as any;
-      const bal = Number(data?.data?.balance ?? data?.balance ?? 0);
-      return { success: true, balance: bal };
     }
     return { success: false, message: `All paths failed: ${errors.join(" | ")}` };
   } catch (e: any) {
