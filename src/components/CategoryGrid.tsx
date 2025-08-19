@@ -21,7 +21,7 @@ export default function CategoryGrid({ items, showLimit = 8 }: { items: Product[
           <div key={p.code} className="bg-[#fefefe] rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition p-1.5 w-full">
             <a href={`/topup/${p.code}`} className="block">
               <div className="relative">
-                <SmartImage src={(p.icon as unknown as string) || "/images/logo/logo-black.png"} alt={p.name} className="w-full aspect-square rounded-xl object-cover" />
+                <SmartImage src={(p.icon as unknown as string) || "/images/logo/gimbox.gif"} alt={p.name} className="w-full aspect-square rounded-xl object-cover" />
                 {p.discountPercent ? (
                   <div className="absolute top-2 right-2 bg-rose-500 text-white text-xs font-bold px-2 py-1 rounded-lg shadow">-{p.discountPercent}%</div>
                 ) : null}

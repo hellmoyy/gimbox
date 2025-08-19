@@ -204,12 +204,77 @@ async function probeSignedPublicBalance() {
   }
 }
 
+async function probeSignedGetPublicBalance() {
+  const secret = getSecretOrNull();
+  const apiKey = env('VCGAMERS_API_KEY');
+  const b = baseUrl();
+  const p = '/v1/public/balance';
+  const url = b + p;
+  console.log(`\n== SIGNED PUBLIC BALANCE GET ==`);
+  console.log('Base:', b);
+  if (!secret) {
+    console.log('Skip: VCGAMERS_SECRET_KEY not set');
+    return;
+  }
+  if (!apiKey) {
+    console.log('Skip: VCGAMERS_API_KEY not set');
+    return;
+  }
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const payloads = ['', ts, p + ts, ts + p, `${ts}:${p}`, `${p}:${ts}`];
+  const sigHeaderNames = ['X-Signature', 'Signature'];
+  const tsHeaderNames = [null, 'X-Timestamp', 'Timestamp'];
+  const authVariants = [
+    { name: 'GET-X-Api-Key', headers: { 'X-Api-Key': apiKey } },
+    { name: 'GET-Bearer', headers: { Authorization: `Bearer ${apiKey}` } },
+  ];
+  const sigEncoders = [
+    { name: 'hex', fn: (s) => crypto.createHmac('sha256', secret).update(s).digest('hex') },
+    { name: 'HEX', fn: (s) => crypto.createHmac('sha256', secret).update(s).digest('hex').toUpperCase() },
+    { name: 'base64', fn: (s) => crypto.createHmac('sha256', secret).update(s).digest('base64') },
+  ];
+  const includeContentType = [false, true];
+  const urlVariants = [url, `${url}?timestamp=${ts}`];
+  for (const u of urlVariants) {
+    for (const payload of payloads) {
+      for (const sigEnc of sigEncoders) {
+        const sig = sigEnc.fn(payload);
+        for (const sigHeader of sigHeaderNames) {
+          for (const tsHeader of tsHeaderNames) {
+            for (const auth of authVariants) {
+              for (const ct of includeContentType) {
+                const headers = { Accept: 'application/json', ...auth.headers, [sigHeader]: sig };
+                if (tsHeader) headers[tsHeader] = ts;
+                if (ct) headers['Content-Type'] = 'application/json';
+                console.log(`\nGET ${u} [${auth.name} + ${sigHeader}${tsHeader ? ' + ' + tsHeader : ''} + ${sigEnc.name}${ct ? ' + CT' : ''}] payload='${payload || '<empty>'}'`);
+                const r = await fetchWithTimeout(u, { method: 'GET', headers, cache: 'no-store' });
+                if (r.error) {
+                  console.log(`ERROR after ${r.ms}ms ->`, r.error.name || 'Error', r.error.code || '', r.error.message || r.error);
+                  continue;
+                }
+                console.log(`STATUS ${r.status} in ${r.ms}ms`);
+                console.log('Body:', preview(r.body));
+                if (r.ok) return; // stop on first success
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 async function main() {
   console.log("VCGamers diagnostics starting...");
   try {
     await probe("balance", candidatesBalance());
   } catch (e) {
     console.log("Balance probe error:", e?.message || e);
+  }
+  try {
+    await probeSignedGetPublicBalance();
+  } catch (e) {
+    console.log("Signed GET balance probe error:", e?.message || e);
   }
   try {
     await probeSignedPublicBalance();

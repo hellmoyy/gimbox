@@ -187,32 +187,28 @@ export async function getBalance(): Promise<{ success: boolean; balance?: number
     const bases = candidateBaseUrls();
     const errors: string[] = [];
 
-    // 1) Try signed POST to /v1/public/balance (Mitra API)
+    // 1) Try signed GET to /v1/public/balance (Mitra API usually expects this)
     try {
       const secret = getSecret();
-      const body = {} as any;
-      const payload = JSON.stringify(body);
-      const signature = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+      const ts = Math.floor(Date.now() / 1000).toString();
       for (const b of bases) {
         const url = b + "/v1/public/balance";
-        const attempts = [
-          { name: "POST-X-Api-Key+X-Signature", headers: { "Content-Type": "application/json", "X-Api-Key": apiKey, "X-Signature": signature } },
-          { name: "POST-Bearer+X-Signature", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, "X-Signature": signature } },
+        // Common variants: signature over timestamp (with X-Timestamp) or empty string (no timestamp)
+        const variants: Array<{ name: string; headers: Record<string, string> }> = [
+          { name: "GET-X-Api-Key+X-Signature+X-Timestamp(ts)", headers: { Accept: "application/json", "X-Api-Key": apiKey, "X-Timestamp": ts, "X-Signature": crypto.createHmac("sha256", secret).update(ts).digest("hex") } },
+          { name: "GET-Bearer+X-Signature+X-Timestamp(ts)", headers: { Accept: "application/json", Authorization: `Bearer ${apiKey}`, "X-Timestamp": ts, "X-Signature": crypto.createHmac("sha256", secret).update(ts).digest("hex") } },
+          { name: "GET-X-Api-Key+X-Signature(empty)", headers: { Accept: "application/json", "X-Api-Key": apiKey, "X-Signature": crypto.createHmac("sha256", secret).update("").digest("hex") } },
+          { name: "GET-Bearer+X-Signature(empty)", headers: { Accept: "application/json", Authorization: `Bearer ${apiKey}`, "X-Signature": crypto.createHmac("sha256", secret).update("").digest("hex") } },
         ];
-        for (const a of attempts) {
-          const res = await fetch(url, {
-            method: "POST",
-            headers: a.headers as any,
-            body: payload,
-            cache: "no-store",
-          }).catch((e: any) => {
-            errors.push(`${url}#${a.name}: ${e?.message || e}`);
+        for (const v of variants) {
+          const res = await fetch(url, { method: "GET", headers: v.headers as any, cache: "no-store" }).catch((e: any) => {
+            errors.push(`${url}#${v.name}: ${e?.message || e}`);
             return undefined as any;
           });
           if (!res) continue;
           const text = await res.text().catch(() => "");
           if (!res.ok) {
-            errors.push(`${url}#${a.name}: HTTP ${res.status} ${(text||'').slice(0,120)}`);
+            errors.push(`${url}#${v.name}: HTTP ${res.status} ${(text||'').slice(0,120)}`);
             continue;
           }
           const data = JSON.parse(text || "{}") as any;
@@ -221,15 +217,15 @@ export async function getBalance(): Promise<{ success: boolean; balance?: number
         }
       }
     } catch (e: any) {
-      // Missing secret is fine; we'll fallback to GET attempts
+      // Missing secret is fine; we'll fallback to other GET attempts
       if (/missing/i.test(String(e?.message))) {
-        errors.push("secret missing: skip signed POST path");
+        errors.push("secret missing: skip signed GET public balance");
       } else {
-        errors.push(`signed POST error: ${e?.message || e}`);
+        errors.push(`signed GET error: ${e?.message || e}`);
       }
     }
 
-    // 2) Fallback: GET on various paths and headers
+    // 2) Fallback: GET on various non-public paths and headers
     const paths = Array.from(new Set([
       pathBalance(),
       "/v2/balance",

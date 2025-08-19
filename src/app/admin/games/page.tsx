@@ -44,7 +44,7 @@ export default async function AdminGames() {
               <tr key={g._id} className="border-t bg-[#fefefe]">
                 <td className="p-3">{g.name}</td>
                 <td className="p-3">{g.code}</td>
-                <td className="p-3"><img src={g.icon || '/images/logo/logo-black.png'} alt="icon" className="w-8 h-8 object-cover rounded" /></td>
+                <td className="p-3"><img src={g.icon || '/images/logo/gimbox.gif'} alt="icon" className="w-8 h-8 object-cover rounded" /></td>
                 <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs ${(g.isActive ?? true) !== false ? 'bg-green-600/10 text-green-700' : 'bg-red-600/10 text-red-700'}`}>{(g.isActive ?? true) !== false ? 'Aktif' : 'Nonaktif'}</span></td>
                 <td className="p-3"><Link href={`/admin/games/${g._id}`} className="text-indigo-600 hover:underline">Edit</Link></td>
               </tr>

@@ -44,7 +44,7 @@ export default async function AdminBanners() {
           <tbody>
             {items.map((b: any) => (
               <tr key={String(b._id)} className="border-t bg-[#fefefe]">
-                <td className="p-3"><img src={b.image || '/images/logo/logo-black.png'} alt="banner" className="w-40 h-16 object-cover rounded" /></td>
+                <td className="p-3"><img src={b.image || '/images/logo/gimbox.gif'} alt="banner" className="w-40 h-16 object-cover rounded" /></td>
                 <td className="p-3">{b.sort ?? ''}</td>
                 <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs ${(b.isActive ?? true) !== false ? 'bg-green-600/10 text-green-700' : 'bg-red-600/10 text-red-700'}`}>{(b.isActive ?? true) !== false ? 'Aktif' : 'Nonaktif'}</span></td>
                 <td className="p-3"><Link href={`/admin/banners/${b._id}`} className="text-indigo-600 hover:underline">Edit</Link></td>

@@ -43,7 +43,7 @@ export default async function AdminCategories() {
               <tr key={c._id} className="border-t bg-[#fefefe]">
                 <td className="p-3">{c.name}</td>
                 <td className="p-3">{c.code}</td>
-                <td className="p-3"><img src={c.icon || '/images/logo/logo-black.png'} alt="icon" className="w-8 h-8 object-cover rounded" /></td>
+                <td className="p-3"><img src={c.icon || '/images/logo/gimbox.gif'} alt="icon" className="w-8 h-8 object-cover rounded" /></td>
                 <td className="p-3">{c.sort ?? ''}</td>
                 <td className="p-3"><span className={`px-2 py-0.5 rounded text-xs ${(c.isActive ?? true) !== false ? 'bg-green-600/10 text-green-700' : 'bg-red-600/10 text-red-700'}`}>{(c.isActive ?? true) !== false ? 'Aktif' : 'Nonaktif'}</span></td>
                 <td className="p-3"><Link href={`/admin/categories/${c._id}`} className="text-indigo-600 hover:underline">Edit</Link></td>

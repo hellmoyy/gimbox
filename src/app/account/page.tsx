@@ -115,7 +115,7 @@ export default function AccountPage() {
                     <div className="flex items-center gap-4">
                       {/* GimCash icon */}
                       <img
-                        src="/images/logo/logo128.png"
+                        src="/images/logo/gimbox.gif"
                         alt="GimCash"
                         className="h-11 w-11 rounded-full object-contain bg-transparent"
                       />

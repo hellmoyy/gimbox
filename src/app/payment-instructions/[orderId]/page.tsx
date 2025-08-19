@@ -309,7 +309,7 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
                       const logoLoaded = await new Promise<HTMLImageElement>((resolve, reject) => {
                         logoImg.onload = () => resolve(logoImg);
                         logoImg.onerror = reject;
-                        logoImg.src = '/images/logo/logo128.png';
+                        logoImg.src = '/images/logo/gimbox.gif';
                       });
                       // Draw onto canvas and export as JPG
                       const size = 512;
@@ -395,7 +395,7 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
                           />
                           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                             <div className="flex items-center justify-center bg-white/95 rounded-lg" style={{ width: 50, height: 50 }}>
-                              <img src="/images/logo/logo128.png" alt="Gimbox" className="w-11 h-11 object-contain" />
+                              <img src="/images/logo/gimbox.gif" alt="Gimbox" className="w-11 h-11 object-contain" />
                             </div>
                           </div>
                         </div>

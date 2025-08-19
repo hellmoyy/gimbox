@@ -26,7 +26,7 @@ type Props = {
   vehicle?: { src: string; width?: number; height?: number; offsetX?: number; offsetY?: number; flipWithDir?: boolean };
 };
 
-export default function GimPlayCharacter({ src = "/images/logo/logo-black.png", animation, width = 64, height = 64, speed = 2, maintainAspect = true, parallaxSpeed = 60, showGround = false, vehicle }: Props) {
+export default function GimPlayCharacter({ src = "/images/logo/gimbox.gif", animation, width = 64, height = 64, speed = 2, maintainAspect = true, parallaxSpeed = 60, showGround = false, vehicle }: Props) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [x, setX] = useState(20);
   const [dir, setDir] = useState<"left" | "right">("right");
