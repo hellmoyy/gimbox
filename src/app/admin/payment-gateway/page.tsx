@@ -75,6 +75,12 @@ export default function PaymentGatewayOverviewPage() {
   return (
     <div>
       <h1 className="text-xl font-semibold mb-4">Payment Gateway • Overview</h1>
+      <div className="grid gap-4 mb-6">
+        <Link href="/admin/payment-gateway/midtrans" className="block p-4 border rounded hover:bg-slate-50">Midtrans</Link>
+        <Link href="/admin/payment-gateway/xendit" className="block p-4 border rounded hover:bg-slate-50">Xendit</Link>
+        <Link href="/admin/payment-gateway/moota" className="block p-4 border rounded hover:bg-slate-50">Moota</Link>
+        <Link href="/admin/payment-gateway/duitku" className="block p-4 border rounded hover:bg-slate-50">Duitku</Link>
+      </div>
   {/* Helpers */}
   {/* Build method options based on each gateway's configured methods */}
   {(() => null)()}

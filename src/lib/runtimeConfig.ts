@@ -15,6 +15,11 @@ export const MONGO_DIRECT = false;
 // Using the default in production will be blocked by middleware.
 export const AUTH_SECRET = process.env.NODE_ENV === "production" ? "" : "dev";
 
+// Duitku payment gateway config
+export const DUITKU_MERCHANT_CODE = process.env.DUITKU_MERCHANT_CODE || "";
+export const DUITKU_API_KEY = process.env.DUITKU_API_KEY || "";
+export const DUITKU_SANDBOX = process.env.DUITKU_SANDBOX === "true";
+
 export const MIDTRANS_SERVER_KEY = "";
 export const MIDTRANS_CLIENT_KEY = "";
 export const MIDTRANS_IS_PRODUCTION = false;
