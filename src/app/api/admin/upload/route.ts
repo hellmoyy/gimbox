@@ -67,12 +67,14 @@ export async function POST(req: NextRequest) {
     const baseName = (safeBase || "image") + "-" + uniq;
 
     if (folder === "banners") {
-      // Reduced dimensions & quality (~50% file size target)
-      const lg = base.clone().resize({ width: 1600, height: 900, fit: "inside", withoutEnlargement: true });
-      const md = base.clone().resize({ width: 800, height: 450, fit: "inside", withoutEnlargement: true });
-      const quality = targetFormat === "webp" ? 60 : 70;
+      // Even smaller: target further ~25-30% reduction
+      // Dimensions now 1280/720 and 640/360 (16:9 friendly) keeping aspect with inside fit.
+      const lg = base.clone().resize({ width: 1280, height: 720, fit: "inside", withoutEnlargement: true });
+      const md = base.clone().resize({ width: 640, height: 360, fit: "inside", withoutEnlargement: true });
+      const quality = targetFormat === "webp" ? 48 : 60; // lowered quality
       const toBuf = async (p: sharp.Sharp) => targetFormat === "webp"
-        ? p.webp({ quality, effort: 5 }).toBuffer()
+        ? p.webp({ quality, effort: 6 }) // higher effort for better compression
+            .toBuffer()
         : p.jpeg({ quality, mozjpeg: true }).toBuffer();
       const [lgBuf, mdBuf] = await Promise.all([toBuf(lg), toBuf(md)]);
       outputs.push({ name: `${baseName}-lg.${targetFormat === 'webp' ? 'webp' : 'jpg'}`, buffer: lgBuf });
@@ -116,7 +118,9 @@ export async function POST(req: NextRequest) {
     // Primary URL = first variant
     const url = `/images/uploads/${folder}/${outputs[0].name}`;
     const variants = outputs.slice(1).map(o => `/images/uploads/${folder}/${o.name}`);
-    return Response.json({ url, variants, debug: { folder, count: outputs.length } });
+  // Collect debug sizes (bytes) to help tune compression
+  const debugSizes = Object.fromEntries(outputs.map(o => [o.name, o.buffer.length]));
+  return Response.json({ url, variants, debug: { folder, count: outputs.length, sizes: debugSizes } });
   } catch (err: any) {
     console.error("/api/admin/upload error:", err);
     return Response.json({ error: "Upload gagal. Coba lagi atau gunakan format PNG/JPG/SVG." }, { status: 500 });
