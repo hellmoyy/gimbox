@@ -3,6 +3,7 @@ import { getDb } from '@/lib/mongodb';
 import { headers } from 'next/headers';
 import FullSyncButton from '@/components/admin/FullSyncButton';
 import MergeDuplicatesButton from '@/components/admin/MergeDuplicatesButton';
+import DeleteInactiveBrandsButton from '@/components/admin/DeleteInactiveBrandsButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,6 +116,7 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
           <Link href="/admin/products/sync" className="bg-indigo-600 text-white px-3 py-2 rounded">Sync Harga VCG</Link>
           <FullSyncButton />
           <MergeDuplicatesButton />
+          <DeleteInactiveBrandsButton />
         </div>
       </div>
       <div className="mb-3 text-xs text-slate-600 flex flex-wrap items-center gap-3">
