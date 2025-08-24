@@ -21,13 +21,19 @@ export async function fetchIAKPriceList(username: string, apiKey: string, secret
   return [];
 }
 
+const PRODUCT_ICON_PLACEHOLDER = process.env.PRODUCT_PLACEHOLDER_URL || 'https://cdn.gimbox.id/placeholder.webp';
+
 export async function upsertProductsFromList(list: ProviderItem[]) {
   if (!Array.isArray(list) || list.length === 0) return { upserted: 0 };
   const db = await getDb();
   let upserted = 0;
   for (const item of list) {
     const update: any = { name: item.name, cost: (item as any).cost };
-    if ((item as any).icon) update.icon = (item as any).icon;
+    if ((item as any).icon && String((item as any).icon).trim() !== '') {
+      update.icon = (item as any).icon;
+    } else {
+      update.icon = PRODUCT_ICON_PLACEHOLDER;
+    }
     if ((item as any).category) {
       const catRaw = (item as any).category as string;
       let code = (catRaw || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -90,12 +96,13 @@ export async function importProductsAddOnly(list: ProviderItem[]) {
       if (!code) code = "game";
       category = code;
     }
+    const rawIcon = (it as any).icon;
     return {
       code: it.code,
       name: it.name,
       cost: (it as any).cost ?? 0,
       price: (it as any).cost ?? 0,
-      icon: (it as any).icon,
+      icon: (rawIcon && String(rawIcon).trim() !== '') ? rawIcon : PRODUCT_ICON_PLACEHOLDER,
       category: category,
       isActive: true,
       createdAt: new Date(),

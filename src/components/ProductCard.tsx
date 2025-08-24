@@ -1,7 +1,9 @@
 import Link from "next/link";
 
-function toCdn(src: string) {
-  if (!src) return src;
+const PRODUCT_ICON_PLACEHOLDER = process.env.PRODUCT_PLACEHOLDER_URL || 'https://cdn.gimbox.id/placeholder.webp';
+
+function toCdn(src: string | undefined) {
+  if (!src || src.trim() === '') return PRODUCT_ICON_PLACEHOLDER;
   // If already absolute (http/https) just return
   if (/^https?:\/\//i.test(src)) return src;
   // Normalize leading slash
