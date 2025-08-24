@@ -12,6 +12,24 @@ Website topup game seperti topmur.com menggunakan Next.js, Tailwind CSS, Digifla
 2. Jalankan `npm install` jika belum.
 3. Jalankan `npm run dev` untuk development.
 
+### Penyimpanan Gambar (Cloudflare R2)
+Untuk membuat upload banner & gambar tetap (tidak hilang saat deploy), gunakan Cloudflare R2 (atau S3 kompatibel).
+
+Tambahkan variable berikut di environment produksi:
+
+```
+R2_BUCKET=nama-bucket
+R2_ACCESS_KEY_ID=***
+R2_SECRET_ACCESS_KEY=***
+R2_ACCOUNT_ID=xxxxxxxxxxxxxxxxxxxx  # atau set R2_ENDPOINT langsung
+# (opsional) jika pakai endpoint custom:
+R2_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
+# URL publik tempat file diakses (custom domain / r2.dev):
+R2_PUBLIC_BASE=https://cdn.example.com
+```
+
+Jika variabel di atas tidak diisi, aplikasi fallback ke write lokal (`/public/images/uploads`) yang bersifat ephemeral di banyak platform (gambar bisa hilang atau tidak terlayani). Pastikan setelah set env & redeploy, upload baru mengembalikan `debug.storage = "r2"`.
+
 ## Integrasi
 - [Digiflazz API](https://developer.digiflazz.com/api/seller/persiapan/)
 - [Midtrans Sandbox](https://docs.midtrans.com/docs/sandbox)
