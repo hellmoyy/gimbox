@@ -9,12 +9,13 @@ export default async function HeroCarousel() {
     const vars: string[] = Array.isArray(b.variants) ? b.variants : [];
     const md = vars.find((v) => /-md\./.test(v));
     const lg = vars.find((v) => /-lg\./.test(v));
-    // Fallback: use base image as lg
-    const main = lg || b.image;
+  // Now prefer medium variant for all viewports to reduce payload; fallback to lg then base image
+  const main = md || lg || b.image;
     return (
       <picture>
-        {md && <source media="(max-width: 900px)" srcSet={md} />}
-        <source media="(min-width: 901px)" srcSet={main} />
+    {/* Use the same md image for all breakpoints; if md missing, main already covers fallback */}
+    <source media="(max-width: 900px)" srcSet={main} />
+    <source media="(min-width: 901px)" srcSet={main} />
         {/* SmartImage fallback to handle error chain */}
         <SmartImage src={main} alt="Banner" className="w-full h-full object-cover object-center" loading="eager" />
       </picture>
@@ -35,6 +36,6 @@ export default async function HeroCarousel() {
     );
   }
   // Map banners to slides with primary image (largest) and preserve link
-  const slides = banners.map((b: any) => ({ image: (Array.isArray(b.variants) && b.variants.find((v:string)=>/-lg\./.test(v))) || b.image, link: b.link }));
+  const slides = banners.map((b: any) => ({ image: (Array.isArray(b.variants) && (b.variants.find((v:string)=>/-md\./.test(v)) || b.variants.find((v:string)=>/-lg\./.test(v)))) || b.image, link: b.link, variants: b.variants }));
   return <HeroBannerSliderClient slides={slides as any} />;
 }

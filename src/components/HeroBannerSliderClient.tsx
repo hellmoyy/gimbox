@@ -93,13 +93,15 @@ export default function HeroBannerSliderClient({ slides, intervalMs = 5000 }: { 
                   <div className="relative w-full h-full">
                     {(() => {
                       const vars = Array.isArray(s.variants) ? s.variants : [];
-                      const md = vars.find(v=>/-md\./.test(v));
-                      const lg = vars.find(v=>/-lg\./.test(v)) || s.image;
+            const md = vars.find(v=>/-md\./.test(v));
+            const lg = vars.find(v=>/-lg\./.test(v));
+            const main = md || lg || s.image;
                       const picture = (
                         <picture>
-                          {md && <source media="(max-width:900px)" srcSet={md} />}
-                          <source media="(min-width:901px)" srcSet={lg} />
-                          <SmartImage src={lg} alt="Banner" className="absolute inset-0 w-full h-full object-cover object-center" loading="eager" />
+              {/* Serve the medium variant for all breakpoints to save bandwidth */}
+              <source media="(max-width:900px)" srcSet={main} />
+              <source media="(min-width:901px)" srcSet={main} />
+              <SmartImage src={main} alt="Banner" className="absolute inset-0 w-full h-full object-cover object-center" loading="eager" />
                         </picture>
                       );
                       if (s.link && s.link.trim() !== "") {
