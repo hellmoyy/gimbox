@@ -115,7 +115,8 @@ export async function GET(req: NextRequest) {
     // also variant: base64(raw hmac bytes)
     attempts = [];
     const signParamNames = ['sign','signature'];
-    let found = false;
+  let found = false;
+  let successSigMeta: any = undefined;
     for (const bs of baseStrings.slice(0,120)) {
       let hexDigest = '';
       let rawDigest: Buffer | undefined;
@@ -141,12 +142,21 @@ export async function GET(req: NextRequest) {
             try { const json = JSON.parse(body||'{}'); brandItems = Array.isArray(json?.data) ? json.data : (Array.isArray(json)?json:[]); } catch{}
           }
           attempts.push({ url, sigLabel: sv.label, signParam: sp, status, ok, items: brandItems.length, ms: Date.now()-startedAt, snippet: body.slice(0,160) });
-          if (brandItems.length) { items = brandItems.map(it => ({ code: String(it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.logo || it.icon, category: it.category })); found = true; break; }
+          if (brandItems.length) {
+            items = brandItems.map(it => ({ code: String(it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.logo || it.icon, category: it.category }));
+            successSigMeta = { baseStringLabel: bs.label, signatureVariant: sv.label, signParam: sp };
+            found = true; break; }
           if (attempts.length >= 200) { found = true; break; }
         }
         if (found) break;
       }
-      if (found) break;
+      if (found) {
+        // Attach meta via a special attempt entry for transparency
+        if (successSigMeta && !attempts.find(a => a.success)) {
+          attempts.push({ success: true, meta: successSigMeta, note: 'brands3 success signature metadata' });
+        }
+        break;
+      }
     }
   } else if (verbose && mode === 'brands2') {
     // Advanced signature probing for brands endpoint.
