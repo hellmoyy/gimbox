@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/mongodb';
 import { headers } from 'next/headers';
+import FullSyncButton from '@/components/admin/FullSyncButton';
+import MergeDuplicatesButton from '@/components/admin/MergeDuplicatesButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,9 +36,32 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
   const page = Math.max(1, Number(sp?.page) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(sp?.pageSize) || 25));
   const q = (sp?.q || '').trim();
+  const cat = (sp?.cat || '').trim(); // category filter via flags
   let data: PaginatedBrands | null = null;
   try {
-  data = await fetchBrands(page, pageSize, q || undefined);
+    // Build filter wrapper with category flag if needed
+    const db = await getDb();
+    const filter: any = {};
+    if (q) {
+      const regex = new RegExp(q.replace(/[-/\\^$*+?.()|[\]{}]/g, '.'), 'i');
+      filter.$or = [ { name: regex }, { code: regex }, { aliases: regex } ];
+    }
+    if (cat) {
+      const flagMap: Record<string,string> = { populer: 'featured', baru: 'newRelease', voucher: 'voucher', pulsa: 'pulsaTagihan', entertainment: 'entertainment' };
+      if (flagMap[cat]) {
+        filter[flagMap[cat]] = true;
+      } else if (cat === 'no-flag') {
+        filter.$and = [ { featured: { $ne: true } }, { newRelease: { $ne: true } }, { voucher: { $ne: true } }, { pulsaTagihan: { $ne: true } }, { entertainment: { $ne: true } } ];
+      }
+    }
+    const total = await db.collection('brands').countDocuments(filter);
+    const items = await db.collection('brands')
+      .find(filter)
+      .sort({ sort: 1, name: 1, _id: 1 })
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .toArray();
+    data = { items, total, page, pageSize };
   } catch {
     data = { items: [], total: 0, page, pageSize };
   }
@@ -50,6 +75,7 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
     if (p > 1) params.set('page', String(p));
     if (pageSize !== 25) params.set('pageSize', String(pageSize));
     if (q) params.set('q', q);
+    if (cat) params.set('cat', cat);
     const qs = params.toString();
     return '/admin/brands' + (qs ? `?${qs}` : '');
   }
@@ -68,15 +94,27 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
     <div className="w-full">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Brands <span className="text-sm font-normal text-slate-500">(Total: {total})</span></h1>
-        <div className="flex items-center gap-2">
-          <form method="get" className="flex items-center gap-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <form method="get" className="flex items-center gap-1 flex-wrap">
             <input type="hidden" name="page" value="1" />
             {pageSize !== 25 && <input type="hidden" name="pageSize" value={pageSize} />}
             <input name="q" defaultValue={q} placeholder="Cari nama / code / alias" className="border rounded px-2 py-1 text-xs bg-[#fefefe]" />
-            <button className="px-2 py-1 text-xs rounded bg-slate-200 hover:bg-slate-300" type="submit">Cari</button>
-            {q && <Link href="/admin/brands" className="text-xs text-slate-500 ml-1">Reset</Link>}
+            <select name="cat" defaultValue={cat} className="border rounded px-2 py-1 text-xs bg-[#fefefe]">
+              <option value="">Semua Flag</option>
+              <option value="populer">Populer</option>
+              <option value="baru">Baru Rilis</option>
+              <option value="voucher">Voucher</option>
+              <option value="pulsa">Pulsa & Tagihan</option>
+              <option value="entertainment">Entertainment</option>
+              <option value="no-flag">Tanpa Flag</option>
+            </select>
+            <button className="px-2 py-1 text-xs rounded bg-slate-200 hover:bg-slate-300" type="submit">Filter</button>
+            {(q || cat) && <Link href="/admin/brands" className="text-xs text-slate-500 ml-1">Reset</Link>}
           </form>
           <Link href="/admin/brands/new" className="bg-green-600 text-white px-3 py-2 rounded">Tambah Brand</Link>
+          <Link href="/admin/products/sync" className="bg-indigo-600 text-white px-3 py-2 rounded">Sync Harga VCG</Link>
+          <FullSyncButton />
+          <MergeDuplicatesButton />
         </div>
       </div>
       <div className="mb-3 text-xs text-slate-600 flex flex-wrap items-center gap-3">
