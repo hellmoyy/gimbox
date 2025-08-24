@@ -44,7 +44,8 @@ export default async function ProductPage(props: { params: Promise<{ brand: stri
           {prod.meta?.sla && (
             <div className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 mb-3">SLA: {prod.meta.sla}</div>
           )}
-          <TopupForm code={prod.brandKey} price={prod.price || 0} variants={variants} />
+          {/* Use full product code so order & analytics tetap spesifik per produk */}
+          <TopupForm code={prod.code} price={prod.price || 0} variants={variants} />
         </div>
       </div>
     </main>
