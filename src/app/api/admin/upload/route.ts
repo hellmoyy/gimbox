@@ -45,38 +45,62 @@ export async function POST(req: NextRequest) {
       return Response.json({ url });
     }
 
-    // Raster image processing with sharp
+    // Raster image processing with sharp (convert/compress to modern format WebP by default)
     const buf = Buffer.from(await file.arrayBuffer());
-
     let meta;
     try {
       meta = await sharp(buf).metadata();
-    } catch (e: any) {
-      // Common when HEIC/HEIF isn't supported by libvips
-      return Response.json({ error: "Gagal membaca gambar. Jika Anda mengunggah HEIC/HEIF, ubah ke JPG/PNG/WEBP lalu coba lagi." }, { status: 400 });
+    } catch {
+      return Response.json({ error: "Gagal membaca gambar. Jika HEIC/HEIF, ubah ke JPG/PNG/WEBP terlebih dahulu." }, { status: 400 });
     }
 
-    // Normalize by folder: banners keep large size, others compact to 512px box
-    let pipeline = sharp(buf).rotate();
+    const wantsOriginalFormat = String(form.get("keepFormat") || "").toLowerCase() === "true"; // optional override
+    const targetFormat = wantsOriginalFormat ? (meta?.format || "jpeg") : "webp";
+
+    // Base pipeline (auto rotate, strip metadata)
+    const base = sharp(buf).rotate();
+
+    // Sizing strategy:
+    //  - banners: generate 2 responsive sizes (lg 1920w, md 960w)
+    //  - others: single max 512px box
+    const outputs: { name: string; buffer: Buffer }[] = [];
+    const baseName = (safeBase || "image") + "-" + uniq;
+
     if (folder === "banners") {
-      // Keep large width for hero banners, limit to 1920x1080 max, preserve aspect ratio
-      pipeline = pipeline.resize({ width: 1920, height: 1080, fit: "inside", withoutEnlargement: true });
+      const lg = base.clone().resize({ width: 1920, height: 1080, fit: "inside", withoutEnlargement: true });
+      const md = base.clone().resize({ width: 960, height: 540, fit: "inside", withoutEnlargement: true });
+      const quality = targetFormat === "webp" ? 78 : 82;
+      const toBuf = async (p: sharp.Sharp) => targetFormat === "webp"
+        ? p.webp({ quality, effort: 5 }).toBuffer()
+        : p.jpeg({ quality, mozjpeg: true }).toBuffer();
+      const [lgBuf, mdBuf] = await Promise.all([toBuf(lg), toBuf(md)]);
+      outputs.push({ name: `${baseName}-lg.${targetFormat === 'webp' ? 'webp' : 'jpg'}`, buffer: lgBuf });
+      outputs.push({ name: `${baseName}-md.${targetFormat === 'webp' ? 'webp' : 'jpg'}`, buffer: mdBuf });
     } else {
-      // Products/Categories/Variants/Payments: compact
-      pipeline = pipeline.resize(512, 512, { fit: "inside", withoutEnlargement: true });
+      // Compact assets
+      let sized = base.resize(512, 512, { fit: "inside", withoutEnlargement: true });
+      // If keeping original & has alpha and original is png, prefer png; else webp handles alpha
+      const quality = targetFormat === "webp" ? 82 : 85;
+      if (targetFormat === "webp") {
+        sized = sized.webp({ quality, effort: 5 });
+      } else if ((meta?.hasAlpha && meta?.format === 'png')) {
+        sized = sized.png({ compressionLevel: 9 });
+      } else {
+        sized = sized.jpeg({ quality, mozjpeg: true });
+      }
+      const assetBuf = await sized.toBuffer();
+      outputs.push({ name: `${baseName}.${targetFormat === 'webp' ? 'webp' : (meta?.hasAlpha && meta?.format === 'png' ? 'png' : 'jpg')}`, buffer: assetBuf });
     }
 
-    // Preserve transparency for non-banners when source has alpha
-    const usePng = folder !== "banners" && !!meta?.hasAlpha;
-    const outBuffer = await (usePng ? pipeline.png({ compressionLevel: 9 }).toBuffer() : pipeline.jpeg({ quality: 85 }).toBuffer());
+    // Persist all generated variants
+    for (const o of outputs) {
+      await fs.writeFile(path.join(destDir, o.name), o.buffer);
+    }
 
-    const ext = usePng ? "png" : "jpg";
-    const fileName = `${(safeBase || "image")}-${uniq}.${ext}`;
-    const destPath = path.join(destDir, fileName);
-    await fs.writeFile(destPath, outBuffer);
-
-    const url = `/images/uploads/${folder}/${fileName}`;
-    return Response.json({ url });
+    // Primary URL = first variant
+    const url = `/images/uploads/${folder}/${outputs[0].name}`;
+    const variants = outputs.slice(1).map(o => `/images/uploads/${folder}/${o.name}`);
+    return Response.json({ url, variants });
   } catch (err: any) {
     console.error("/api/admin/upload error:", err);
     return Response.json({ error: "Upload gagal. Coba lagi atau gunakan format PNG/JPG/SVG." }, { status: 500 });
