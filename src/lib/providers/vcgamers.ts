@@ -301,28 +301,149 @@ export async function getBrandProducts(brandKey: string): Promise<Array<{ provid
 // Public variations endpoint (alternative denomination listing) – simpler structure.
 // Sample response item fields observed: key, variation_name, brand_name, price, is_active, sla, is_new
 export async function getVariations(brandKey: string): Promise<Array<{ providerProductCode: string; name: string; cost: number; brandKey: string; meta?: any }>> {
-  try {
-    const apiKey = getApiKey();
-    const url = `${baseUrl()}/v2/public/variations?brand_key=${encodeURIComponent(brandKey)}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` }, cache: 'no-store' });
-    if (!res.ok) return [];
-    const json: any = await res.json().catch(()=> ({}));
-    const items = Array.isArray(json?.data) ? json.data : [];
-    return items.map((it:any)=>({
-      providerProductCode: String(it.key || ''),
-      name: String(it.variation_name || it.name || ''),
-      cost: Number(it.price || 0),
-      brandKey,
-      meta: {
-        isActive: it.is_active,
-        sla: it.sla,
-        isNew: it.is_new,
-        raw: undefined,
-      }
-    }));
-  } catch {
-    return [];
+  const debug = process.env.DEBUG_VCGAMERS === '1';
+  // In-memory caches (module scope singletons)
+  const g: any = globalThis as any;
+  if (!g.__vcgVarCache) g.__vcgVarCache = new Map(); // brandKey -> {ts, items}
+  if (!g.__vcgVarSigCache) g.__vcgVarSigCache = new Map(); // brandKey -> {sig, variant, kind, ts, brandVariant}
+  const cache: Map<string, any> = g.__vcgVarCache;
+  const sigCache: Map<string, any> = g.__vcgVarSigCache;
+  const ttlMs = Number(process.env.VCGAMERS_VARIATIONS_TTL_MS || 300000); // default 5m
+  const now = Date.now();
+  const cached = cache.get(brandKey);
+  if (cached && (now - cached.ts) < ttlMs) {
+    return cached.items;
   }
+  const apiKey = (()=>{ try { return getApiKey(); } catch { return ''; } })();
+  const secret = (()=>{ try { return getSecret(); } catch { return ''; } })();
+  const b = baseUrl();
+  const results: Array<{ providerProductCode: string; name: string; cost: number; brandKey: string; meta?: any }> = [];
+  const attempts: Array<any> = [];
+  const brandVariants = Array.from(new Set([brandKey, brandKey.toUpperCase(), brandKey.toLowerCase()]));
+  type SigVar = { sig: string; kind: string; brandVariant: string };
+  const headers = { Authorization: `Bearer ${apiKey}` } as Record<string,string>;
+  const endpoint = (sig: string, v: string) => `${b}/v2/public/variations?brand_key=${encodeURIComponent(v)}&sign=${encodeURIComponent(sig)}`;
+
+  // 1. Fast path: existing in-memory signature
+  const remembered = sigCache.get(brandKey);
+  if (remembered) {
+    const url = endpoint(remembered.sig, remembered.brandVariant);
+    try {
+      const r = await fetch(url, { headers, cache: 'no-store' });
+      if (r.ok) {
+        const j: any = await r.json().catch(()=>({}));
+        const items = Array.isArray(j?.data) ? j.data : [];
+        if (items.length) {
+          for (const it of items) results.push({ providerProductCode: String(it.key||it.code||''), name: String(it.variation_name||it.name||''), cost: Number(it.price||it.amount||0), brandKey, meta: { isActive: it.is_active, sla: it.sla, isNew: it.is_new } });
+          cache.set(brandKey, { ts: now, items: results });
+          return results;
+        }
+      }
+    } catch {}
+  }
+  // 2. DB-stored signature (persistent) if enabled
+  if (!remembered && process.env.VCGAMERS_LOAD_SIGNATURES !== '0') {
+    try {
+      const db = await getDb();
+      const doc = await db.collection('vcg_signatures').findOne({ kind: 'variations', brandKey });
+      if (doc?.sig) {
+        const url = endpoint(doc.sig, doc.brandVariant || brandKey.toUpperCase());
+        try {
+          const r = await fetch(url, { headers, cache: 'no-store' });
+          if (r.ok) {
+            const j: any = await r.json().catch(()=>({}));
+            const items = Array.isArray(j?.data) ? j.data : [];
+            if (items.length) {
+              for (const it of items) results.push({ providerProductCode: String(it.key||it.code||''), name: String(it.variation_name||it.name||''), cost: Number(it.price||it.amount||0), brandKey, meta: { isActive: it.is_active, sla: it.sla, isNew: it.is_new } });
+              sigCache.set(brandKey, { sig: doc.sig, variant: doc.sigKind, kind: doc.sigKind, brandVariant: doc.brandVariant || brandKey.toUpperCase(), ts: now });
+              cache.set(brandKey, { ts: now, items: results });
+              return results;
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+  // 3. Full brute force if no fast path success
+  const baseStrings: string[] = [];
+  for (const v of brandVariants) {
+    baseStrings.push(secret + 'variation+' + v);
+    baseStrings.push(secret + 'variation' + v);
+    baseStrings.push(secret + 'variations+' + v);
+    baseStrings.push(secret + 'variations' + v);
+  }
+  const uniqueBase = Array.from(new Set(baseStrings));
+  function buildSignatures(base: string) {
+    const out: SigVar[] = [];
+    try {
+      const h512raw = crypto.createHmac('sha512', secret).update(base).digest();
+      const hex = h512raw.toString('hex');
+      out.push({ sig: Buffer.from(hex).toString('base64'), kind: 'b64(hex(hmac512))', brandVariant: '' });
+      out.push({ sig: hex, kind: 'hex(hmac512)', brandVariant: '' });
+      out.push({ sig: h512raw.toString('base64'), kind: 'b64(raw(hmac512))', brandVariant: '' });
+      out.push({ sig: hex.toUpperCase(), kind: 'HEX(hmac512)', brandVariant: '' });
+    } catch {}
+    try {
+      const h256raw = crypto.createHmac('sha256', secret).update(base).digest();
+      const hex = h256raw.toString('hex');
+      out.push({ sig: hex, kind: 'hex(hmac256)', brandVariant: '' });
+      out.push({ sig: Buffer.from(hex).toString('base64'), kind: 'b64(hex(hmac256))', brandVariant: '' });
+    } catch {}
+    out.push({ sig: base, kind: 'raw(baseString)', brandVariant: '' });
+    return out;
+  }
+  outer: for (const baseStr of uniqueBase) {
+    for (const sigVar of buildSignatures(baseStr)) {
+      for (const v of brandVariants) {
+        const url = endpoint(sigVar.sig, v);
+        let res: Response | undefined; let text = '';
+        try { res = await fetch(url, { headers, cache: 'no-store' }); text = await res.text(); } catch (e:any) { attempts.push({ url, ok:false, err:e.message }); continue; }
+        if (!res.ok) { attempts.push({ url, ok:false, status: res.status, sigKind: sigVar.kind }); continue; }
+        let json: any = {}; try { json = JSON.parse(text || '{}'); } catch {}
+        const items = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
+        if (items.length) {
+          for (const it of items) results.push({ providerProductCode: String(it.key||it.code||''), name: String(it.variation_name||it.name||''), cost: Number(it.price||it.amount||0), brandKey, meta: { isActive: it.is_active, sla: it.sla, isNew: it.is_new } });
+          sigCache.set(brandKey, { sig: sigVar.sig, variant: v, kind: sigVar.kind, brandVariant: v, ts: now });
+          if (process.env.VCGAMERS_PERSIST_SIGNATURES === '1') {
+            try {
+              const db = await getDb();
+              await db.collection('vcg_signatures').updateOne(
+                { kind: 'variations', brandKey },
+                { $set: { kind: 'variations', brandKey, sig: sigVar.sig, sigKind: sigVar.kind, brandVariant: v, updatedAt: new Date() } },
+                { upsert: true }
+              );
+            } catch {}
+          }
+          attempts.push({ url, ok:true, status: res.status, count: items.length, sigKind: sigVar.kind, variant: v });
+          if (debug) console.log('[vcgamers] variations success', brandKey, attempts[attempts.length-1]);
+          break outer;
+        } else {
+          attempts.push({ url, ok:false, status: res.status, count: 0, sigKind: sigVar.kind, variant: v });
+        }
+      }
+    }
+  }
+  // 4. Unsigned fallback if still empty
+  if (!results.length) {
+    try {
+      const fallbackUrl = `${b}/v2/public/variations?brand_key=${encodeURIComponent(brandKey)}`;
+      const r = await fetch(fallbackUrl, { headers, cache: 'no-store' });
+      if (r.ok) {
+        const j: any = await r.json().catch(()=>({}));
+        const items = Array.isArray(j?.data) ? j.data : [];
+        for (const it of items) results.push({ providerProductCode: String(it.key||''), name: String(it.variation_name||it.name||''), cost: Number(it.price||0), brandKey, meta: { isActive: it.is_active, sla: it.sla, isNew: it.is_new } });
+        if (items.length && debug) console.log('[vcgamers] variations unsigned fallback', brandKey, items.length);
+      }
+    } catch {}
+  }
+  if (!results.length && debug) {
+    try {
+      const db = await getDb();
+      await db.collection('vcg_attempts').insertOne({ kind: 'variations', brandKey, attempts: attempts.slice(0,40), createdAt: new Date() });
+    } catch {}
+  }
+  if (results.length) cache.set(brandKey, { ts: now, items: results });
+  return results;
 }
 
 export async function createOrder(req: VCGOrderRequest): Promise<VCGOrderResponse> {

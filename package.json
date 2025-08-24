@@ -15,6 +15,7 @@
     "images:convert": "node scripts/convert-webp-to-jpg.js",
     "images:download": "node scripts/download-assets.js",
     "vcg:test": "node scripts/test-vcgamers.mjs",
+  "vcg:pull": "node scripts/pull-vcg-brand.mjs",
     "brands:enrich": "node scripts/enrich-brands.mjs",
   "brands:auto-enrich": "node scripts/auto-enrich-brands.mjs",
   "brands:update-devpub": "node scripts/update-devpub.mjs"
