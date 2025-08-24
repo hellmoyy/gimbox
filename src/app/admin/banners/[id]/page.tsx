@@ -5,8 +5,9 @@ import DeleteButton from "../../../../components/admin/DeleteButton";
 
 export const dynamic = "force-dynamic";
 
-export default async function BannerEditor({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+// NOTE: Adjust params typing to standard App Router (object, not Promise) to avoid runtime edge errors in prod
+export default async function BannerEditor({ params }: { params: { id: string } }) {
+  const { id } = params;
   const isNew = id === "new";
   let banner: any = { image: "", sort: 0, isActive: true, variants: [] };
   if (!isNew) {
@@ -67,7 +68,7 @@ export default async function BannerEditor({ params }: { params: Promise<{ id: s
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Variants (otomatis diisi saat upload)</label>
-              <textarea name="variants" defaultValue={(banner.variants || []).join('\n')} className="w-full border rounded px-3 py-2 text-xs h-20 whitespace-pre" placeholder=""> </textarea>
+              <textarea name="variants" defaultValue={(banner.variants || []).join('\n')} className="w-full border rounded px-3 py-2 text-xs h-20 whitespace-pre" placeholder="" />
               <p className="text-[11px] text-slate-500 mt-1">Setiap baris adalah satu URL variant (misal -lg dan -md). Jangan edit manual kecuali perlu.</p>
             </div>
           </div>

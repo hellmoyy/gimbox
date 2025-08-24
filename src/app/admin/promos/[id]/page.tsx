@@ -3,12 +3,12 @@ import Link from "next/link";
 import ProductImageUploader from "@/components/admin/ProductImageUploader";
 import { getDb } from "../../../../lib/mongodb";
 
-type Params = { params: Promise<{ id: string }> };
+type Params = { params: { id: string } };
 
 export const dynamic = "force-dynamic";
 
 export default async function PromoEditor({ params }: Params) {
-  const { id } = await params;
+  const { id } = params;
   const creating = id === "new";
   const db = await getDb();
   let item: any = null;
