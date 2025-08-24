@@ -94,13 +94,28 @@ export async function POST(req: NextRequest) {
 
     // Persist all generated variants
     for (const o of outputs) {
-      await fs.writeFile(path.join(destDir, o.name), o.buffer);
+      const full = path.join(destDir, o.name);
+      try {
+        await fs.writeFile(full, o.buffer);
+      } catch (e) {
+        console.error("upload: gagal tulis file", full, e);
+        return Response.json({ error: "Gagal menyimpan file (filesystem tidak writable di server)." }, { status: 500 });
+      }
+    }
+
+    // Verify first file really exists (diagnostic)
+    const firstPath = path.join(destDir, outputs[0].name);
+    try {
+      await fs.stat(firstPath);
+    } catch (e) {
+      console.error("upload: file pertama tidak ditemukan setelah tulis", firstPath, e);
+      return Response.json({ error: "File tidak tersedia setelah upload (kemungkinan storage ephemeral)." }, { status: 500 });
     }
 
     // Primary URL = first variant
     const url = `/images/uploads/${folder}/${outputs[0].name}`;
     const variants = outputs.slice(1).map(o => `/images/uploads/${folder}/${o.name}`);
-    return Response.json({ url, variants });
+    return Response.json({ url, variants, debug: { folder, count: outputs.length } });
   } catch (err: any) {
     console.error("/api/admin/upload error:", err);
     return Response.json({ error: "Upload gagal. Coba lagi atau gunakan format PNG/JPG/SVG." }, { status: 500 });

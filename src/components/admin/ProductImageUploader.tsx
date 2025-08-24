@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from "react";
 type Props = {
   defaultFolder?: string;
   defaultName?: string;
-  onUploadedFieldName?: string;
-  onUploaded?: (url: string) => void;
+  onUploadedFieldName?: string; // primary single URL field (e.g. image/icon)
+  variantsFieldName?: string; // optional textarea/hidden input to store responsive variants (one per line)
+  onUploaded?: (url: string, variants?: string[]) => void;
 };
 
-export default function ProductImageUploader({ defaultFolder = "products", defaultName = "produk", onUploadedFieldName = "icon", onUploaded }: Props) {
+export default function ProductImageUploader({ defaultFolder = "products", defaultName = "produk", onUploadedFieldName = "icon", variantsFieldName = "variants", onUploaded }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string>("");
   const [uploading, setUploading] = useState(false);
@@ -42,7 +43,7 @@ export default function ProductImageUploader({ defaultFolder = "products", defau
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Gagal upload");
       setPreview(j.url);
-      // set target input value (icon)
+      // set primary field value (could be hidden readonly input)
       const field = document.querySelector(`input[name="${onUploadedFieldName}"]`) as HTMLInputElement | null;
       if (field) {
         field.value = j.url;
@@ -50,7 +51,16 @@ export default function ProductImageUploader({ defaultFolder = "products", defau
         const evt = new Event("input", { bubbles: true });
         field.dispatchEvent(evt);
       }
-      if (onUploaded) onUploaded(j.url);
+      // handle variants (banners only or when API returns them)
+      if (j.variants && Array.isArray(j.variants) && j.variants.length) {
+        const variantsField = document.querySelector(`[name="${variantsFieldName}"]`) as HTMLTextAreaElement | HTMLInputElement | null;
+        if (variantsField) {
+          variantsField.value = j.variants.join("\n");
+          const evt2 = new Event("input", { bubbles: true });
+          variantsField.dispatchEvent(evt2);
+        }
+      }
+      if (onUploaded) onUploaded(j.url, j.variants);
     } catch (err: any) {
       setError(err.message || "Gagal upload");
     } finally {

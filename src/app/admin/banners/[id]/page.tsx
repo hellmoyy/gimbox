@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function BannerEditor({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const isNew = id === "new";
-  let banner: any = { image: "", sort: 0, isActive: true };
+  let banner: any = { image: "", sort: 0, isActive: true, variants: [] };
   if (!isNew) {
     try {
       const db = await getDb();
@@ -45,17 +45,30 @@ export default async function BannerEditor({ params }: { params: Promise<{ id: s
         <div>
           <div className="mb-2 text-sm font-medium">Gambar Banner</div>
           <div className="rounded-2xl shadow overflow-hidden min-h-[160px] bg-slate-100 flex items-center justify-center">
-            {banner.image ? (
-              <img src={banner.image} alt="banner" className="w-full h-48 md:h-64 object-cover" />
-            ) : (
-              <div className="text-slate-500 text-sm">Belum ada gambar</div>
-            )}
+            {(() => {
+              if (!banner.image) return <div className="text-slate-500 text-sm">Belum ada gambar</div>;
+              const vars: string[] = Array.isArray(banner.variants) ? banner.variants : [];
+              const lg = vars.find((v)=>/-lg\./.test(v)) || banner.image;
+              const md = vars.find((v)=>/-md\./.test(v));
+              return (
+                <picture>
+                  {md && <source media="(max-width:900px)" srcSet={md} />}
+                  <source media="(min-width:901px)" srcSet={lg} />
+                  <img src={lg} alt="banner" className="w-full h-48 md:h-64 object-cover" />
+                </picture>
+              );
+            })()}
           </div>
           <div className="mt-2 space-y-2">
-            <ProductImageUploader defaultFolder="banners" defaultName="banner" onUploadedFieldName="image" />
+            <ProductImageUploader defaultFolder="banners" defaultName="banner" onUploadedFieldName="image" variantsFieldName="variants" />
             <div>
               <label className="block text-sm font-medium mb-1">URL Gambar</label>
               <input name="image" defaultValue={banner.image || ""} className="w-full border rounded px-3 py-2 text-sm" readOnly />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Variants (otomatis diisi saat upload)</label>
+              <textarea name="variants" defaultValue={(banner.variants || []).join('\n')} className="w-full border rounded px-3 py-2 text-xs h-20 whitespace-pre" placeholder=""> </textarea>
+              <p className="text-[11px] text-slate-500 mt-1">Setiap baris adalah satu URL variant (misal -lg dan -md). Jangan edit manual kecuali perlu.</p>
             </div>
           </div>
         </div>
