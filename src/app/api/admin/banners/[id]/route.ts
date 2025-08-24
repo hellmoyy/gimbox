@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       const msg = e?.name === "MongoServerSelectionError" ? "Database unavailable" : "Invalid ID";
       return Response.json({ error: msg }, { status: 400 });
     }
-    return Response.redirect(new URL("/admin/banners", req.url));
+  return Response.redirect('/admin/banners');
   }
 
   const update: any = {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const msg = e?.name === "MongoServerSelectionError" ? "Database unavailable" : "Invalid ID";
     return Response.json({ error: msg }, { status: 400 });
   }
-  return Response.redirect(new URL("/admin/banners", req.url));
+  return Response.redirect('/admin/banners');
 }
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {

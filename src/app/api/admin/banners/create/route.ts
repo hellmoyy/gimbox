@@ -27,5 +27,5 @@ export async function POST(req: NextRequest) {
     const msg = e?.name === "MongoServerSelectionError" ? "Database unavailable" : "DB error";
     return Response.json({ error: msg }, { status: 503 });
   }
-  return Response.redirect(new URL("/admin/banners", req.url));
+  return Response.redirect('/admin/banners');
 }
