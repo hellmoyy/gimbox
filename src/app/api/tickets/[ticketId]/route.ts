@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import type { UpdateFilter } from "mongodb";
 import { getToken } from "next-auth/jwt";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import sharp from "sharp";
 
 type TicketMessage = {
   author: "user" | "admin";
@@ -51,32 +53,77 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tic
       const files = form.getAll('images');
       const maxFiles = 5;
       const maxSize = 2 * 1024 * 1024; // 2MB each
-      const pathMod = await import('path');
-      const fs = await import('fs/promises');
       const { ticketId } = await params;
-      const baseDir = pathMod.join(process.cwd(), 'public', 'uploads', 'tickets', ticketId);
-      try { await fs.mkdir(baseDir, { recursive: true }); } catch {}
+      // Decide storage: R2 (S3 compatible) if env present else local FS fallback (ephemeral risk)
+      const useR2 = !!process.env.R2_BUCKET && !!process.env.R2_ACCESS_KEY_ID && !!process.env.R2_SECRET_ACCESS_KEY;
+      let client: S3Client | null = null;
+      let bucket = '';
+      let basePublic = '';
+      if (useR2) {
+        const endpoint = process.env.R2_ENDPOINT || `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+        client = new S3Client({
+          region: 'auto',
+          endpoint,
+          credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID!, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY! },
+        });
+        bucket = process.env.R2_BUCKET!;
+        basePublic = (process.env.R2_PUBLIC_BASE || `${endpoint}/${bucket}`).replace(/\/$/, '');
+      } else {
+        const pathMod = await import('path');
+        const fs = await import('fs/promises');
+        const baseDir = pathMod.join(process.cwd(), 'public', 'uploads', 'tickets', ticketId);
+        try { await fs.mkdir(baseDir, { recursive: true }); } catch {}
+      }
       let count = 0;
       for (const f of files) {
         if (!(f instanceof File)) continue;
         if (!f.type.startsWith('image/')) continue;
-        if (f.size > maxSize) continue;
+        if (f.size > maxSize) continue; // skip oversize
         if (count >= maxFiles) break;
-        const ab = await f.arrayBuffer();
-        const buf = Buffer.from(ab);
-        const safeName = (f.name || 'image').replace(/[^a-zA-Z0-9_.-]/g, '_');
-        const fileName = Date.now().toString() + '_' + safeName;
-        const fullPath = pathMod.join(baseDir, fileName);
         try {
-          await fs.writeFile(fullPath, buf);
-          attachments.push({
-            url: `/uploads/tickets/${ticketId}/${fileName}`,
-            name: f.name || fileName,
-            size: f.size,
-            type: f.type,
-          });
+          const ab = await f.arrayBuffer();
+          let buf = Buffer.from(ab);
+          // Convert & downscale via sharp (webp) to reduce size further (max 1280px)
+          try {
+            const img = sharp(buf).rotate().resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true });
+            const optimized = await img.webp({ quality: 70, effort: 5 }).toBuffer();
+            buf = Buffer.from(optimized); // ensure standard Buffer type
+          } catch {}
+          const safeName = (f.name || 'image').replace(/[^a-zA-Z0-9_.-]/g, '_').replace(/__+/g,'_');
+          const baseName = Date.now().toString() + '_' + safeName.replace(/\.(png|jpg|jpeg|webp|gif|heic|heif)$/i,'');
+          const finalName = baseName + '.webp';
+          if (useR2 && client) {
+            const key = `tickets/${ticketId}/${finalName}`;
+            await client.send(new PutObjectCommand({
+              Bucket: bucket,
+              Key: key,
+              Body: buf,
+              ContentType: 'image/webp'
+            }));
+            attachments.push({
+              url: `${basePublic}/${key}`,
+              name: f.name || finalName,
+              size: buf.length,
+              type: 'image/webp',
+            });
+          } else {
+            const pathMod = await import('path');
+            const fs = await import('fs/promises');
+            const baseDir = pathMod.join(process.cwd(), 'public', 'uploads', 'tickets', ticketId);
+            try { await fs.mkdir(baseDir, { recursive: true }); } catch {}
+            const fullPath = pathMod.join(baseDir, finalName);
+            await fs.writeFile(fullPath, buf);
+            attachments.push({
+              url: `/uploads/tickets/${ticketId}/${finalName}`,
+              name: f.name || finalName,
+              size: buf.length,
+              type: 'image/webp',
+            });
+          }
           count++;
-        } catch {}
+        } catch (e) {
+          // ignore this file on error
+        }
       }
     } else {
       // JSON body fallback
