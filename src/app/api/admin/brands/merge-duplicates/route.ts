@@ -25,23 +25,15 @@ export async function POST(req: NextRequest) {
   const dry = body?.dry === true; // allow test run
   const providerFilter = body?.provider ? String(body.provider) : null;
   const limit = typeof body?.limit === 'number' ? body.limit : 0;
+  const mode: 'providerRef' | 'codeCase' | 'nameNorm' = body?.mode === 'codeCase' ? 'codeCase' : body?.mode === 'nameNorm' ? 'nameNorm' : 'providerRef';
 
   const brands = await db.collection('brands').find({}).toArray();
-  const providerIndex: Record<string, Record<string, any[]>> = {};
-  for (const b of brands) {
-    for (const prov of Object.keys(b.providerRefs||{})) {
-      if (providerFilter && prov !== providerFilter) continue;
-      for (const ref of b.providerRefs[prov]||[]) {
-        const lc = String(ref).toLowerCase();
-        providerIndex[prov] ||= {}; providerIndex[prov][lc] ||= []; providerIndex[prov][lc].push(b);
-      }
-    }
-  }
   const merges: MergeRecord[] = [];
   let groupsScanned = 0;
-  for (const prov of Object.keys(providerIndex)) {
-    for (const ref of Object.keys(providerIndex[prov])) {
-      const list = providerIndex[prov][ref];
+
+  async function buildAndProcessGroups(groupMap: Record<string, any[]>, refBuilder: (key:string, list:any[])=>{prov:string;ref:string}) {
+    for (const key of Object.keys(groupMap)) {
+      const list = groupMap[key];
       if (list.length < 2) continue;
       groupsScanned++;
       if (limit && merges.length >= limit) break;
@@ -63,20 +55,16 @@ export async function POST(req: NextRequest) {
           if (donor) setUpdate[field] = donor[field];
         }
       }
-      // Repoint products
+      // Repoint products from dupes -> canonical
       const prodCursor = db.collection('products').find({ brandKey: { $in: dupes.map(d=>d.code) } }).project({ _id:1, code:1, brandKey:1 });
       let productsChanged = 0;
       while (await prodCursor.hasNext()) {
-        const p = await prodCursor.next();
-        if (!p) continue; // safety
-        const oldBrandKey: string | undefined = p.brandKey;
-        if (!oldBrandKey) continue;
-        if (oldBrandKey === canonical.code) continue;
+        const p = await prodCursor.next(); if (!p) continue;
+        const oldBrandKey: string | undefined = p.brandKey; if (!oldBrandKey || oldBrandKey === canonical.code) continue;
         if (typeof p.code !== 'string' || !p.code.startsWith(oldBrandKey+'-')) continue;
         const suffix = p.code.slice(oldBrandKey.length+1);
         const newCode = `${canonical.code}-${suffix}`.toLowerCase();
-        const exists = await db.collection('products').findOne({ code: newCode });
-        if (exists) continue;
+        const exists = await db.collection('products').findOne({ code: newCode }); if (exists) continue;
         if (!dry) {
           await db.collection('products').updateOne({ _id: p._id }, { $set: { code: newCode, brandKey: canonical.code, gameCode: canonical.code, category: canonical.code, updatedAt: new Date() } });
         }
@@ -86,8 +74,41 @@ export async function POST(req: NextRequest) {
         await db.collection('brands').updateOne({ _id: canonical._id }, { $set: setUpdate });
         await db.collection('brands').updateMany({ _id: { $in: dupes.map(d=>d._id) } }, { $set: { isActive:false, mergedInto: canonical.code, updatedAt: new Date() } });
       }
-      merges.push({ provider: prov, ref, canonical: canonical.code, dupes: dupes.map(d=>d.code), productsChanged });
+      const refInfo = refBuilder(key, list);
+      merges.push({ provider: refInfo.prov, ref: refInfo.ref, canonical: canonical.code, dupes: dupes.map(d=>d.code), productsChanged });
     }
   }
-  return NextResponse.json({ ok: true, dry, merges, mergeGroups: merges.length, groupsScanned });
+
+  if (mode === 'providerRef') {
+    const providerIndex: Record<string, Record<string, any[]>> = {};
+    for (const b of brands) {
+      for (const prov of Object.keys(b.providerRefs||{})) {
+        if (providerFilter && prov !== providerFilter) continue;
+        for (const ref of b.providerRefs[prov]||[]) {
+          const lc = String(ref).toLowerCase();
+          providerIndex[prov] ||= {}; providerIndex[prov][lc] ||= []; providerIndex[prov][lc].push(b);
+        }
+      }
+    }
+    for (const prov of Object.keys(providerIndex)) {
+      await buildAndProcessGroups(providerIndex[prov], (key)=>({ prov, ref: key }));
+    }
+  } else if (mode === 'codeCase') {
+    const map: Record<string, any[]> = {};
+    for (const b of brands) {
+      const key = (b.code||'').toLowerCase();
+      map[key] ||= []; map[key].push(b);
+    }
+    await buildAndProcessGroups(map, (key, list)=>({ prov: 'codeCase', ref: key }));
+  } else if (mode === 'nameNorm') {
+    const map: Record<string, any[]> = {};
+    const norm = (v:string)=> (v||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+    for (const b of brands) {
+      const key = norm(b.name||b.code||'');
+      map[key] ||= []; map[key].push(b);
+    }
+    await buildAndProcessGroups(map, (key)=>({ prov: 'nameNorm', ref: key }));
+  }
+
+  return NextResponse.json({ ok: true, dry, mode, merges, mergeGroups: merges.length, groupsScanned });
 }

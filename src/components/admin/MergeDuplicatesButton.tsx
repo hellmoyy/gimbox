@@ -9,6 +9,7 @@ export default function MergeDuplicatesButton() {
   const [open, setOpen] = useState(false);
   const [limit, setLimit] = useState<string>('');
   const [provider, setProvider] = useState<string>('');
+  const [mode, setMode] = useState<'providerRef'|'codeCase'|'nameNorm'>('providerRef');
 
   async function doFetch(body: any, setter:(v:any)=>void, stateSetter:(v:boolean)=>void) {
     stateSetter(true); setter(null);
@@ -25,7 +26,7 @@ export default function MergeDuplicatesButton() {
   function closeModal() { if (loading || previewLoading) return; setOpen(false); }
 
   async function runPreview() {
-    await doFetch({ dry:true, limit: limit? Number(limit): undefined, provider: provider|| undefined }, setPreview, setPreviewLoading);
+    await doFetch({ dry:true, mode, limit: limit? Number(limit): undefined, provider: provider|| undefined }, setPreview, setPreviewLoading);
   }
   async function runApply() {
     if (!preview) {
@@ -34,7 +35,7 @@ export default function MergeDuplicatesButton() {
     }
     const confirmRun = window.confirm('Yakin merge sekarang? Brand duplikat akan dinonaktifkan.');
     if (!confirmRun) return;
-    await doFetch({ dry:false, limit: limit? Number(limit): undefined, provider: provider|| undefined }, setApplied, setLoading);
+    await doFetch({ dry:false, mode, limit: limit? Number(limit): undefined, provider: provider|| undefined }, setApplied, setLoading);
   }
 
   return (
@@ -48,7 +49,7 @@ export default function MergeDuplicatesButton() {
               <button onClick={closeModal} className="text-slate-500 hover:text-slate-700" aria-label="Close">✕</button>
             </div>
             <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div>
                   <label className="block text-xs font-medium mb-1">Provider (opsional)</label>
                   <input value={provider} onChange={e=>setProvider(e.target.value)} placeholder="vcgamers" className="w-full border rounded px-2 py-1" />
@@ -56,6 +57,14 @@ export default function MergeDuplicatesButton() {
                 <div>
                   <label className="block text-xs font-medium mb-1">Limit groups (opsional)</label>
                   <input value={limit} onChange={e=>setLimit(e.target.value.replace(/[^0-9]/g,''))} placeholder="0=semua" className="w-full border rounded px-2 py-1" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Mode</label>
+                  <select value={mode} onChange={e=>setMode(e.target.value as any)} className="w-full border rounded px-2 py-1 text-xs">
+                    <option value="providerRef">Provider Ref</option>
+                    <option value="codeCase">Code Case</option>
+                    <option value="nameNorm">Name Normalized</option>
+                  </select>
                 </div>
                 <div className="flex items-end">
                   <button type="button" onClick={runPreview} disabled={previewLoading} className="bg-indigo-600 text-white px-3 py-2 rounded w-full disabled:opacity-60">{previewLoading? 'Preview...' : 'Preview'}</button>
@@ -85,7 +94,7 @@ export default function MergeDuplicatesButton() {
               )}
             </div>
             <div className="mt-4 flex items-center justify-between gap-3">
-              <div className="text-[11px] text-slate-500">Merge menggunakan providerRefs lowercase. Field yang sudah terisi di canonical tidak ditimpa.</div>
+              <div className="text-[11px] text-slate-500">Mode: {mode}. Field terisi di canonical tidak ditimpa. Gunakan Preview dulu.</div>
               <div className="flex items-center gap-2">
                 <button onClick={runApply} disabled={loading} className="bg-rose-600 text-white px-4 py-2 rounded text-sm disabled:opacity-60">{loading? 'Merging...' : 'Apply Merge'}</button>
                 <button onClick={closeModal} className="px-3 py-2 text-sm rounded border">Tutup</button>
