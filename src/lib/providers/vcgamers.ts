@@ -132,6 +132,34 @@ export async function getPriceList(): Promise<Array<{ code: string; name: string
   }
 }
 
+// Discovered brand listing signature: sign = Base64( hex( HMAC_SHA512(secret + 'brand', secret) ) )
+export async function getBrands(): Promise<Array<{ key: string; name: string; image?: string }>> {
+  try {
+    const apiKey = getApiKey();
+    const secret = getSecret();
+    const base = baseUrl();
+    const baseString = secret + 'brand';
+    const hmacHex = crypto.createHmac('sha512', secret).update(baseString).digest('hex');
+    const signature = Buffer.from(hmacHex).toString('base64');
+    const url = `${base}/v2/public/brands?sign=${encodeURIComponent(signature)}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` }, cache: 'no-store' }).catch((e:any)=>{
+      console.warn('[vcgamers] getBrands fetch error', e?.message||e); return undefined as any; });
+    if (!res) return [];
+    const text = await res.text();
+    if (!res.ok) {
+      console.warn('[vcgamers] getBrands HTTP', res.status, text.slice(0,120));
+      return [];
+    }
+    let json: any = {};
+    try { json = JSON.parse(text||'{}'); } catch {}
+    const items = Array.isArray(json?.data)? json.data : (Array.isArray(json)? json : []);
+    return items.filter(Boolean).map((it:any)=>({ key: String(it.key||''), name: String(it.name||''), image: it.image_url || it.logo || it.icon }));
+  } catch (e:any) {
+    console.warn('[vcgamers] getBrands error', e?.message||e);
+    return [];
+  }
+}
+
 export async function createOrder(req: VCGOrderRequest): Promise<VCGOrderResponse> {
   const { apiKey } = getKeys();
   const url = baseUrl() + "/v1/orders"; // TODO: confirm path

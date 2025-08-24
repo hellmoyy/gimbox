@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
           }
           attempts.push({ url, sigLabel: sv.label, signParam: sp, status, ok, items: brandItems.length, ms: Date.now()-startedAt, snippet: body.slice(0,160) });
           if (brandItems.length) {
-            items = brandItems.map(it => ({ code: String(it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.logo || it.icon, category: it.category }));
+            items = brandItems.map(it => ({ code: String(it.key || it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.image_url || it.logo || it.icon, category: it.category }));
             successSigMeta = { baseStringLabel: bs.label, signatureVariant: sv.label, signParam: sp };
             found = true; break; }
           if (attempts.length >= 200) { found = true; break; }
@@ -226,7 +226,7 @@ export async function GET(req: NextRequest) {
       }
     }
     if (Array.isArray(items)) {
-      items = items.map(it => ({ code: String(it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.logo || it.icon, category: it.category }));
+  items = items.map(it => ({ code: String(it.key || it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.image_url || it.logo || it.icon, category: it.category }));
     }
   } else if (verbose && mode === 'brands') {
     // Probe brand listing endpoint: /v2/public/brands?sign=...
@@ -290,7 +290,7 @@ export async function GET(req: NextRequest) {
             attempts.push({ url, signLabel: sc.label, signParam: signName, ok, status, items: brandItems.length, ms: Date.now()-started, error, snippet: bodyText.slice(0,240) });
             baseAttempts++;
             if (brandItems.length) {
-              items = brandItems.map(it => ({ code: String(it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.logo || it.icon, category: it.category }));
+              items = brandItems.map(it => ({ code: String(it.key || it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.image_url || it.logo || it.icon, category: it.category }));
               break outerBrands;
             }
             if (baseAttempts >= perBaseLimit) break;
