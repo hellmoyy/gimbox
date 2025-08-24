@@ -23,6 +23,7 @@ export async function POST(req: NextRequest, context: { params: { code: string }
   const voucher = form.get('voucher') === 'on';
   const pulsaTagihan = form.get('pulsaTagihan') === 'on';
   const entertainment = form.get('entertainment') === 'on';
+  const featuredOrderRaw = form.get('featuredOrder');
   const doc: any = { updatedAt: new Date(), isActive };
   if (name) doc.name = name;
   if (iconRaw) {
@@ -74,6 +75,10 @@ export async function POST(req: NextRequest, context: { params: { code: string }
   doc.voucher = voucher;
   doc.pulsaTagihan = pulsaTagihan;
   doc.entertainment = entertainment;
+  if (featuredOrderRaw !== null && featuredOrderRaw !== undefined) {
+    const val = String(featuredOrderRaw).trim();
+    doc.featuredOrder = val === '' ? undefined : Number(val);
+  }
   try {
     const db = await getDb();
     await db.collection('brands').updateOne(

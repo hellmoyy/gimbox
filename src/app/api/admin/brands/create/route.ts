@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
   const voucher = form.get('voucher') === 'on';
   const pulsaTagihan = form.get('pulsaTagihan') === 'on';
   const entertainment = form.get('entertainment') === 'on';
+  const featuredOrderRaw = form.get('featuredOrder');
   if (!code) return NextResponse.json({ error: 'Code required' }, { status: 400 });
   const aliases = aliasesRaw ? Array.from(new Set(aliasesRaw.split(/[,\n]/).map(s=>s.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''))).values()).filter(Boolean) : [];
   let providerRefs: Record<string,string[]> | undefined = undefined;
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
   voucher,
   pulsaTagihan,
   entertainment,
+  featuredOrder: featuredOrderRaw !== null && featuredOrderRaw !== undefined && String(featuredOrderRaw).trim() !== '' ? Number(featuredOrderRaw) : undefined,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

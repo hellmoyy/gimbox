@@ -63,6 +63,11 @@ export default function NewBrand() {
           </div>
           <p className="text-xs text-slate-500 mt-1">Centang seksi home tempat brand ini ingin muncul (ke depannya akan dipakai render brand bukan produk).</p>
         </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Urutan Populer (angka kecil tampil lebih dulu)</label>
+          <input name="featuredOrder" type="number" min="0" className="w-full border rounded px-3 py-2 bg-[#fefefe]" placeholder="Kosongkan jika tidak diatur" />
+          <p className="text-xs text-slate-500 mt-1">Hanya dipakai jika brand dicentang sebagai Populer.</p>
+        </div>
         <button className="bg-green-600 text-white px-4 py-2 rounded">Simpan</button>
       </form>
     </div>

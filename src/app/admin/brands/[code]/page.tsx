@@ -77,6 +77,11 @@ export default async function BrandDetail(props: { params: any }) {
           </div>
           <p className="text-xs text-slate-500 mt-1">Atur di seksi home mana brand muncul.</p>
         </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Urutan Populer</label>
+          <input name="featuredOrder" type="number" min="0" defaultValue={brand.featuredOrder ?? ''} className="w-full border rounded px-3 py-2 bg-[#fefefe]" placeholder="Kosongkan" />
+          <p className="text-xs text-slate-500 mt-1">Jika diisi dan brand Populer, angka kecil akan tampil lebih awal.</p>
+        </div>
         <button className="bg-indigo-600 text-white px-4 py-2 rounded">Simpan</button>
       </form>
     </div>
