@@ -87,7 +87,77 @@ export async function GET(req: NextRequest) {
   const started = Date.now();
   let items: any[] = [];
   let attempts: any[] | undefined;
-  if (verbose && mode === 'brands') {
+  if (verbose && mode === 'brands2') {
+    // Advanced signature probing for brands endpoint.
+    const apiKey = process.env.VCGAMERS_API_KEY || '';
+    const secret = process.env.VCGAMERS_SECRET_KEY || '';
+    const bases = Array.from(new Set([
+      (process.env.VCGAMERS_BASE_URL || '').replace(/\/$/, '') || 'https://mitra-api.vcgamers.com',
+      'https://sandbox-api.vcgamers.com'
+    ]));
+    const ts = Math.floor(Date.now()/1000).toString();
+    const path = '/v2/public/brands';
+    const combos: Array<{ label: string; raw: string }> = [];
+    const push = (l:string,r:string) => combos.push({ label: l, raw: r });
+    if (secret) push('secret', secret);
+    if (apiKey) push('apiKey', apiKey);
+    push('ts', ts);
+    if (secret && apiKey) {
+      const seqs = [
+        ['secret','apiKey','ts'],['apiKey','secret','ts'],['secret','ts','apiKey'],['ts','secret','apiKey'],['apiKey','ts','secret'],['ts','apiKey','secret']
+      ];
+      for (const s of seqs) push(s.join('+'), s.map(k=>({secret,apiKey,ts}[k as 'secret']||'')).join(''));
+      push('path+ts', path+ts);
+      push('path+apiKey+ts', path+apiKey+ts);
+      push('path+ts+secret', path+ts+secret);
+      push('method+path+ts', 'GET'+path+ts);
+      push('method+path+apiKey+ts', 'GET'+path+apiKey+ts);
+      push('ts+path', ts+path);
+      push('apiKey+path+ts', apiKey+path+ts);
+    }
+    const signatures: Array<{ label:string; value:string; placement:'query'|'header' }> = [];
+    const seen = new Set<string>();
+    for (const c of combos) {
+      const basesig = [
+        { label: c.label+':hmacSHA256', value: crypto.createHmac('sha256', secret||apiKey||'x').update(c.raw).digest('hex') },
+        { label: c.label+':hmacSHA256:UP', value: crypto.createHmac('sha256', secret||apiKey||'x').update(c.raw).digest('hex').toUpperCase() },
+        { label: c.label+':sha256', value: crypto.createHash('sha256').update(c.raw).digest('hex') },
+        { label: c.label+':md5', value: crypto.createHash('md5').update(c.raw).digest('hex') },
+        { label: c.label+':sha1', value: crypto.createHash('sha1').update(c.raw).digest('hex') },
+        { label: c.label+':b64', value: Buffer.from(c.raw).toString('base64') },
+        { label: c.label+':raw', value: c.raw }
+      ];
+      for (const sig of basesig) {
+        if (!seen.has(sig.value)) {
+          seen.add(sig.value);
+          signatures.push({ label: sig.label, value: sig.value, placement: 'query' });
+          signatures.push({ label: sig.label+'#hdr', value: sig.value, placement: 'header' });
+        }
+        if (signatures.length > 160) break;
+      }
+      if (signatures.length > 160) break;
+    }
+    attempts = [];
+    outerAdv: for (const b of bases) {
+      for (const sig of signatures) {
+        const queryBase = `${b}${path}?ts=${ts}`;
+        const url = sig.placement === 'query' ? `${queryBase}&sign=${encodeURIComponent(sig.value)}` : queryBase;
+        const headers: Record<string,string> = { Authorization: `Bearer ${apiKey}`, 'X-Timestamp': ts };
+        if (sig.placement === 'header') headers['X-Signature'] = sig.value;
+        const started = Date.now();
+        let status=0; let ok=false; let body=''; let error: string|undefined;
+        try { const res = await fetch(url,{ headers }); status=res.status; ok=res.ok; body=await res.text(); } catch(e:any){ error=e?.message||String(e); }
+        let brandItems: any[] = [];
+        if (ok) { try { const json = JSON.parse(body||'{}'); brandItems = Array.isArray(json?.data)?json.data:(Array.isArray(json)?json:[]); } catch{} }
+        attempts.push({ url, sigLabel: sig.label, placement: sig.placement, status, ok, items: brandItems.length, ms: Date.now()-started, snippet: body.slice(0,180) });
+        if (brandItems.length) { items = brandItems; break outerAdv; }
+        if (attempts.length >= 220) break outerAdv;
+      }
+    }
+    if (Array.isArray(items)) {
+      items = items.map(it => ({ code: String(it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.logo || it.icon, category: it.category }));
+    }
+  } else if (verbose && mode === 'brands') {
     // Probe brand listing endpoint: /v2/public/brands?sign=...
     const apiKey = process.env.VCGAMERS_API_KEY || '';
     const secret = process.env.VCGAMERS_SECRET_KEY || '';
@@ -125,7 +195,9 @@ export async function GET(req: NextRequest) {
     const brandPaths = ['/v2/public/brands','/v2/brands','/v1/brands'];
     // sign parameter names to attempt
     const signParamNames = ['sign','signature'];
+    const perBaseLimit = Math.ceil(80 / bases.length);
     outerBrands: for (const b of bases) {
+      let baseAttempts = 0;
       for (const pathBase of brandPaths) {
         for (const signName of signParamNames) {
           for (const sc of signCandidates) {
@@ -145,13 +217,16 @@ export async function GET(req: NextRequest) {
               } catch {}
             }
             attempts.push({ url, signLabel: sc.label, signParam: signName, ok, status, items: brandItems.length, ms: Date.now()-started, error, snippet: bodyText.slice(0,240) });
+            baseAttempts++;
             if (brandItems.length) {
               items = brandItems.map(it => ({ code: String(it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.logo || it.icon, category: it.category }));
               break outerBrands;
             }
+            if (baseAttempts >= perBaseLimit) break;
             if (attempts.length >= 80) break outerBrands;
           }
         }
+        if (attempts.length >= 80 || baseAttempts >= perBaseLimit) break;
       }
     }
   } else if (verbose) {
