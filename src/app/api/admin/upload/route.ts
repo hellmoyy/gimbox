@@ -67,9 +67,10 @@ export async function POST(req: NextRequest) {
     const baseName = (safeBase || "image") + "-" + uniq;
 
     if (folder === "banners") {
-      const lg = base.clone().resize({ width: 1920, height: 1080, fit: "inside", withoutEnlargement: true });
-      const md = base.clone().resize({ width: 960, height: 540, fit: "inside", withoutEnlargement: true });
-      const quality = targetFormat === "webp" ? 78 : 82;
+      // Reduced dimensions & quality (~50% file size target)
+      const lg = base.clone().resize({ width: 1600, height: 900, fit: "inside", withoutEnlargement: true });
+      const md = base.clone().resize({ width: 800, height: 450, fit: "inside", withoutEnlargement: true });
+      const quality = targetFormat === "webp" ? 60 : 70;
       const toBuf = async (p: sharp.Sharp) => targetFormat === "webp"
         ? p.webp({ quality, effort: 5 }).toBuffer()
         : p.jpeg({ quality, mozjpeg: true }).toBuffer();

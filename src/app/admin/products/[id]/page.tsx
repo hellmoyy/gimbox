@@ -5,12 +5,12 @@ import ProductImageUploader from "@/components/admin/ProductImageUploader";
 import VariantsEditor from "@/components/admin/VariantsEditor";
 import { getCategories } from "@/lib/categories";
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 export const dynamic = "force-dynamic";
 
 export default async function ProductEditor({ params }: Params) {
-  const { id } = params;
+  const { id } = await params;
   const creating = id === "new";
   const db = await getDb();
   let item: any = null;

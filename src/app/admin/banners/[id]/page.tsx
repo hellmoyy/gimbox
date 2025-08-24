@@ -5,9 +5,9 @@ import DeleteButton from "../../../../components/admin/DeleteButton";
 
 export const dynamic = "force-dynamic";
 
-// NOTE: Adjust params typing to standard App Router (object, not Promise) to avoid runtime edge errors in prod
-export default async function BannerEditor({ params }: { params: { id: string } }) {
-  const { id } = params;
+// Using Promise-based params (project typing expects this)
+export default async function BannerEditor({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const isNew = id === "new";
   let banner: any = { image: "", sort: 0, isActive: true, variants: [] };
   if (!isNew) {

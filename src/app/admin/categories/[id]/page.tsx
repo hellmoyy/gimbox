@@ -5,8 +5,8 @@ import ProductImageUploader from "@/components/admin/ProductImageUploader";
 
 export const dynamic = "force-dynamic";
 
-export default async function CategoryEditor({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default async function CategoryEditor({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const creating = id === "new";
   const db = await getDb();
   let item: any = null;
