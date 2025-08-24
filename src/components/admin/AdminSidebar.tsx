@@ -121,9 +121,10 @@ const nav: NavItem[] = [
     icon: icons.card,
     children: [
       { href: "/admin/payment-gateway", label: "Overview", icon: icons.dot },
-      { href: "/admin/payment-gateway/xendit", label: "Xendit", icon: icons.dot },
-      { href: "/admin/payment-gateway/midtrans", label: "Midtrans", icon: icons.dot },
-      { href: "/admin/payment-gateway/moota", label: "Moota", icon: icons.dot },
+  { href: "/admin/payment-gateway/xendit", label: "Xendit", icon: icons.dot },
+  { href: "/admin/payment-gateway/midtrans", label: "Midtrans", icon: icons.dot },
+  { href: "/admin/payment-gateway/moota", label: "Moota", icon: icons.dot },
+  { href: "/admin/payment-gateway/duitku", label: "Duitku", icon: icons.dot },
   { href: "/admin/webhook-logs", label: "Webhook Logs", icon: icons.dot },
     ],
   },

@@ -16,7 +16,7 @@ export default function CategoryGrid({ items, showLimit = 8 }: { items: Product[
 
   return (
     <div>
-      <div className="grid grid-cols-4 gap-2">
+  <div className="grid grid-cols-3 gap-3">
         {visible.map((p) => (
           <div key={p.code} className="bg-[#fefefe] rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition p-1.5 w-full">
             <a href={`/topup/${p.code}`} className="block">

@@ -1,6 +1,7 @@
 "use client";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
+import LoadingOverlay from "@/components/LoadingOverlay";
 
 export default function AccountPage() {
   const { data: session, status } = useSession();
@@ -60,33 +61,38 @@ export default function AccountPage() {
     });
   }
 
-  // Dummy GimCash history (15 items)
-  type HistoryItem = { id: number; date: string; title: string; note: string; amount: number };
-  const historyData: HistoryItem[] = Array.from({ length: 15 }, (_, i) => {
-    const idx = i + 1;
-    const dt = new Date();
-    dt.setDate(dt.getDate() - i);
-    const iso = dt.toISOString();
-    const topup = idx % 3 === 0; // some positive entries
-    return {
-      id: idx,
-      date: iso,
-      title: topup ? "Top Up GimCash" : "Pembelian Produk",
-      note: topup ? `Top up via Midtrans #${1000 + idx}` : `Order #${5000 + idx}`,
-      amount: topup ? 20000 + idx * 1000 : -(15000 + idx * 500),
-    };
-  });
-  const pageSize = 5;
-  const totalPages = Math.max(1, Math.ceil(historyData.length / pageSize));
-  const pagedHistory = historyData.slice((historyPage - 1) * pageSize, historyPage * pageSize);
+  type HistoryItem = { date: string; amount: number; note?: string; type?: string; title?: string; id?: string | number };
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const pageSize = 10;
+  useEffect(() => {
+    let ignore = false;
+    async function loadHistory() {
+      if (!historyOpen) return;
+      try {
+        const res = await fetch(`/api/wallet/history?page=${historyPage}&pageSize=${pageSize}`, { cache: 'no-store' });
+        const j = await res.json();
+        if (!ignore && j?.success) {
+          setHistoryItems(Array.isArray(j.items) ? j.items : []);
+          setHistoryTotal(Number(j.total || 0));
+        }
+      } catch {}
+    }
+    if (session) loadHistory();
+    return () => { ignore = true; };
+  }, [session, historyOpen, historyPage]);
+  const totalPages = Math.max(1, Math.ceil(historyTotal / pageSize));
+  const pagedHistory = historyItems;
   const fmtIDR = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
 
+  const showOverlay = loading || (status === 'authenticated' && gimCash === null);
   return (
     <main className="min-h-screen pb-24">
+      {showOverlay && <LoadingOverlay label={loading ? "Memuat profil..." : "Memuat saldo..."} show={true} size={64} />}
       <div className="mx-auto w-full max-w-md md:max-w-6xl px-4 mt-6">
         <div className="p-6 text-slate-700 flex flex-col items-center justify-center min-h-[60vh]">
           {loading ? (
-            <div>Memuat…</div>
+            <div className="text-slate-500 text-sm">Memuat…</div>
           ) : session ? (
             <div className="w-full max-w-sm">
               {/* Profile header (no card) */}
@@ -115,7 +121,7 @@ export default function AccountPage() {
                     <div className="flex items-center gap-4">
                       {/* GimCash icon */}
                       <img
-                        src="/images/logo/gimbox.gif"
+                        src="/images/logo/logo-onlt.png"
                         alt="GimCash"
                         className="h-11 w-11 rounded-full object-contain bg-transparent"
                       />
@@ -349,25 +355,39 @@ export default function AccountPage() {
                       </div>
                       <div className="max-h-[60vh] overflow-auto p-2">
                         <ul className="divide-y divide-slate-200">
-                          {pagedHistory.map((item) => (
-                            <li key={item.id} className="flex items-center gap-3 p-3">
-                              <div className={`h-9 w-9 rounded-full flex items-center justify-center ${item.amount > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                {item.amount > 0 ? (
-                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M12 5l-5 5M12 5l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
-                                ) : (
-                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="text-sm font-medium text-slate-800 truncate">{item.title}</p>
-                                  <p className={`text-sm font-semibold whitespace-nowrap ${item.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtIDR(item.amount)}</p>
+                          {pagedHistory.length === 0 && (
+                            <li className="p-4 text-center text-xs text-slate-500">Belum ada riwayat.</li>
+                          )}
+                          {pagedHistory.map((item, idx) => {
+                            const income = item.amount > 0;
+                            const title = item.title || (income ? 'Top Up GimCash' : 'Pemakaian GimCash');
+                            const note = item.note || item.type || '';
+                            const dateVal = (item as any).date || (item as any).createdAt || (item as any).timestamp || null;
+                            let dateDisplay = '';
+                            if (dateVal) {
+                              const d = new Date(dateVal);
+                              if (!isNaN(d.getTime())) dateDisplay = d.toLocaleString('id-ID');
+                            }
+                            return (
+                              <li key={(item.id ?? `${item.date}-${idx}`)} className="flex items-center gap-3 p-3">
+                                <div className={`h-9 w-9 rounded-full flex items-center justify-center ${income ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                  {income ? (
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M12 5l-5 5M12 5l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+                                  ) : (
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+                                  )}
                                 </div>
-                                <p className="text-xs text-slate-500 truncate">{item.note}</p>
-                                <p className="text-[11px] text-slate-400">{new Date(item.date).toLocaleString('id-ID')}</p>
-                              </div>
-                            </li>
-                          ))}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-sm font-medium text-slate-800 truncate">{title}</p>
+                                    <p className={`text-sm font-semibold whitespace-nowrap ${income ? 'text-green-600' : 'text-red-600'}`}>{fmtIDR(item.amount)}</p>
+                                  </div>
+                                  {note && <p className="text-xs text-slate-500 truncate">{note}</p>}
+                                  <p className="text-[11px] text-slate-400">{dateDisplay || '—'}</p>
+                                </div>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                       <div className="flex items-center justify-between gap-2 p-3 border-t border-slate-200 text-sm">
@@ -379,15 +399,12 @@ export default function AccountPage() {
                           Prev
                         </button>
                         <div className="flex items-center gap-1">
-                          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                            <button
-                              key={p}
-                              className={`h-8 w-8 rounded-md text-sm font-medium ${p === historyPage ? 'bg-blue-600 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}
-                              onClick={() => setHistoryPage(p)}
-                            >
-                              {p}
-                            </button>
+                          {Array.from({ length: Math.min(6, totalPages) }, (_, i) => i + 1).map((p) => (
+                            <button key={p} className={`h-8 w-8 rounded-md text-sm font-medium ${p === historyPage ? 'bg-blue-600 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`} onClick={() => setHistoryPage(p)}>{p}</button>
                           ))}
+                          {historyPage > 3 && historyPage < totalPages - 2 && (
+                            <span className="text-[11px] text-slate-500">Hal {historyPage}</span>
+                          )}
                         </div>
                         <button
                           className="px-3 py-1 rounded-md border border-slate-300 text-slate-700 disabled:opacity-40 hover:bg-slate-50"

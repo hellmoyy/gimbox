@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
-type GwName = "midtrans" | "xendit" | "moota";
+type GwName = "midtrans" | "xendit" | "moota" | "duitku";
 type GwState = {
   enabled: boolean;
   keys: Record<string, any>;
@@ -20,6 +20,7 @@ export default function PaymentGatewayOverviewPage() {
   const [midtrans, setMidtrans] = useState<GwState>(defaultState);
   const [xendit, setXendit] = useState<GwState>(defaultState);
   const [moota, setMoota] = useState<GwState>(defaultState);
+  const [duitku, setDuitku] = useState<GwState>(defaultState);
   const [activePayments, setActivePayments] = useState<Array<{ id: string; label: string; gateway: string; method: string; logoUrl?: string; enabled: boolean; sort: number; feeType?: 'flat'|'percent'; feeValue?: number }>>([]);
   const [apSaving, setApSaving] = useState(false);
   const [editingIds, setEditingIds] = useState<string[]>([]);
@@ -31,6 +32,7 @@ export default function PaymentGatewayOverviewPage() {
         loadGw("midtrans", setMidtrans),
         loadGw("xendit", setXendit),
         loadGw("moota", setMoota),
+        loadGw("duitku", setDuitku),
       ]);
       // Load active payments after gateways
       try {
@@ -73,106 +75,139 @@ export default function PaymentGatewayOverviewPage() {
   }
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold mb-4">Payment Gateway • Overview</h1>
-      <div className="grid gap-4 mb-6">
-        <Link href="/admin/payment-gateway/midtrans" className="block p-4 border rounded hover:bg-slate-50">Midtrans</Link>
-        <Link href="/admin/payment-gateway/xendit" className="block p-4 border rounded hover:bg-slate-50">Xendit</Link>
-        <Link href="/admin/payment-gateway/moota" className="block p-4 border rounded hover:bg-slate-50">Moota</Link>
-        <Link href="/admin/payment-gateway/duitku" className="block p-4 border rounded hover:bg-slate-50">Duitku</Link>
-      </div>
-  {/* Helpers */}
-  {/* Build method options based on each gateway's configured methods */}
-  {(() => null)()}
-      {/* Active Payments Manager */}
-  <div className="rounded-xl border p-4 mb-4">
-        <div className="flex items-center justify-between">
-          <div className="font-medium">Active Payment</div>
-          <button
-            onClick={async () => {
-              setApSaving(true);
-              try {
-                const items = activePayments.map((it, idx) => ({ ...it, sort: idx }));
-                const res = await fetch('/api/admin/gateways/active-payments', {
-                  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items })
-                });
-                const j = await res.json();
-                if (!j?.success) throw new Error(j?.message || 'Gagal menyimpan');
-              } catch (e) { /* show toast later if needed */ }
-              finally { setApSaving(false); }
-            }}
-            className="px-3 py-2 rounded bg-indigo-600 text-white text-sm disabled:opacity-60"
-            disabled={apSaving}
-          >{apSaving ? 'Menyimpan…' : 'Simpan'}</button>
+    <div className="max-w-6xl mx-auto px-4 py-8">
+  <h1 className="text-2xl font-bold mb-8 text-slate-700">Payment Gateway Overview</h1>
+
+      <section className="mb-10">
+        <h2 className="text-lg font-semibold mb-4">Available Gateways</h2>
+        <div className="grid gap-6 md:grid-cols-4 sm:grid-cols-2">
+          <Link href="/admin/payment-gateway/midtrans" className="block p-6 border rounded-xl shadow-sm hover:bg-slate-50 transition">
+            <div className="font-bold text-indigo-700 mb-2">Midtrans</div>
+            <div className="text-xs text-slate-500">Payment gateway for cards, VA, e-wallets</div>
+          </Link>
+          <Link href="/admin/payment-gateway/xendit" className="block p-6 border rounded-xl shadow-sm hover:bg-slate-50 transition">
+            <div className="font-bold text-blue-700 mb-2">Xendit</div>
+            <div className="text-xs text-slate-500">Payment gateway for cards, VA, e-wallets</div>
+          </Link>
+          <Link href="/admin/payment-gateway/moota" className="block p-6 border rounded-xl shadow-sm hover:bg-slate-50 transition">
+            <div className="font-bold text-green-700 mb-2">Moota</div>
+            <div className="text-xs text-slate-500">Bank mutation automation</div>
+          </Link>
+          <Link href="/admin/payment-gateway/duitku" className="block p-6 border rounded-xl shadow-sm hover:bg-slate-50 transition">
+            <div className="font-bold text-orange-700 mb-2">Duitku</div>
+            <div className="text-xs text-slate-500">Payment gateway for cards, VA, QRIS, e-wallets</div>
+          </Link>
         </div>
-        <div className="mt-3 text-xs text-slate-500">Atur daftar metode yang ditampilkan ke user. Drag untuk susun urutan. Toggle untuk aktif/nonaktif. Hanya metode yang aktif di masing-masing gateway yang muncul pada pilihan.</div>
-        <div className="mt-3 divide-y rounded-lg border overflow-hidden">
-          {activePayments.map((it, idx) => (
-            <ActivePaymentRow
-              key={it.id}
-              item={it}
-              index={idx}
-              onChange={(ni) => setActivePayments((arr) => arr.map(x => x.id===ni.id?ni:x))}
-              onMove={(from, to) => setActivePayments((arr) => { const a = [...arr]; const [sp] = a.splice(from,1); a.splice(to,0,sp); return a; })}
-              onDelete={(id) => setActivePayments((arr) => arr.filter(x => x.id !== id))}
-              methodsMap={{
-                midtrans: Array.isArray(midtrans.methods) ? midtrans.methods : [],
-                xendit: Array.isArray(xendit.methods) ? xendit.methods : [],
-                moota: Array.isArray(moota.methods) ? moota.methods : [],
-              }}
-              editing={editingIds.includes(it.id)}
-              onToggleEdit={(id) => setEditingIds((list) => list.includes(id) ? list.filter(x=>x!==id) : [...list, id])}
+      </section>
+
+          <section>
+  <h2 className="text-lg font-semibold mb-4 text-slate-700">Gateway Status</h2>
+          <div className="grid gap-6 md:grid-cols-4 sm:grid-cols-2">
+            <GatewayCard
+              name="Midtrans"
+              docLink="https://midtrans.com/"
+              manageHref="/admin/payment-gateway/midtrans"
+              state={midtrans}
+              onToggle={() => toggleEnable("midtrans", midtrans, setMidtrans)}
+              keyStatus={midtransKeyStatus(midtrans.keys)}
             />
-          ))}
-          {activePayments.length === 0 && (
-            <div className="p-4 text-sm text-slate-500">Belum ada item. Tambahkan dari gateway yang aktif.</div>
-          )}
+            <GatewayCard
+              name="Xendit"
+              docLink="https://xendit.co/"
+              manageHref="/admin/payment-gateway/xendit"
+              state={xendit}
+              onToggle={() => toggleEnable("xendit", xendit, setXendit)}
+              keyStatus={xenditKeyStatus(xendit.keys)}
+            />
+            <GatewayCard
+              name="Moota"
+              docLink="https://moota.co/"
+              manageHref="/admin/payment-gateway/moota"
+              state={moota}
+              onToggle={() => toggleEnable("moota", moota, setMoota)}
+              keyStatus={mootaKeyStatus(moota.keys)}
+            />
+            <GatewayCard
+              name="Duitku"
+              docLink="https://duitku.com/"
+              manageHref="/admin/payment-gateway/duitku"
+              state={duitku}
+              onToggle={() => toggleEnable("duitku", duitku, setDuitku)}
+              keyStatus={duitkuKeyStatus(duitku.keys)}
+            />
         </div>
-        <div className="mt-3">
-          <button
-            className="px-3 py-2 rounded border text-sm"
-            onClick={() => setActivePayments((arr) => {
-              const methodsMap = {
-                midtrans: Array.isArray(midtrans.methods) ? midtrans.methods : [],
-                xendit: Array.isArray(xendit.methods) ? xendit.methods : [],
-                moota: Array.isArray(moota.methods) ? moota.methods : [],
-              } as Record<string, string[]>;
-              const order: Array<keyof typeof methodsMap> = ['midtrans','xendit','moota'];
-              const gw = order.find(g => (methodsMap[g] || []).length > 0) || 'midtrans';
-              const m = (methodsMap[gw] || [])[0] || '';
-              const methodLabels: Record<string, string> = { qris: 'QRIS', va_bca: 'VA BCA', va_bni: 'VA BNI', va_bri: 'VA BRI', va_permata: 'Permata VA', gopay: 'GoPay', shopeepay: 'ShopeePay', ovo: 'OVO', dana: 'Dana', linkaja: 'LinkAja', bank_transfer: 'Transfer Bank' };
-              const label = methodLabels[m] || (m ? m : 'Metode');
-              return ([...arr, { id: `${Date.now()}`, label, gateway: gw, method: m, logoUrl: '', enabled: true, sort: arr.length }]);
-            })}
-          >+ Tambah Item</button>
+      </section>
+
+
+      <section className="mb-10">
+        <h2 className="text-lg font-semibold mb-4 text-slate-700">Active Payment Methods</h2>
+        <div className="rounded-xl border p-6 bg-white shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-medium text-slate-700">Manage Active Payments</div>
+            <button
+              onClick={async () => {
+                setApSaving(true);
+                try {
+                  const items = activePayments.map((it, idx) => ({ ...it, sort: idx }));
+                  const res = await fetch('/api/admin/gateways/active-payments', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items })
+                  });
+                  const j = await res.json();
+                  if (!j?.success) throw new Error(j?.message || 'Gagal menyimpan');
+                } catch (e) { /* show toast later if needed */ }
+                finally { setApSaving(false); }
+              }}
+              className="px-4 py-2 rounded bg-indigo-600 text-white text-sm disabled:opacity-60"
+              disabled={apSaving}
+            >{apSaving ? 'Menyimpan…' : 'Simpan'}</button>
+          </div>
+            <div className="mb-4 text-xs text-slate-700">Atur daftar metode yang ditampilkan ke user. Drag untuk susun urutan. Toggle untuk aktif/nonaktif. Hanya metode yang aktif di masing-masing gateway yang muncul pada pilihan.</div>
+            <div className="divide-y rounded-lg border overflow-x-auto w-full">
+            {activePayments.map((it, idx) => (
+              <ActivePaymentRow
+                key={it.id}
+                item={it}
+                index={idx}
+                onChange={(ni) => setActivePayments((arr) => arr.map(x => x.id===ni.id?ni:x))}
+                onMove={(from, to) => setActivePayments((arr) => { const a = [...arr]; const [sp] = a.splice(from,1); a.splice(to,0,sp); return a; })}
+                onDelete={(id) => setActivePayments((arr) => arr.filter(x => x.id !== id))}
+                methodsMap={{
+                  midtrans: Array.isArray(midtrans.methods) ? midtrans.methods : [],
+                  xendit: Array.isArray(xendit.methods) ? xendit.methods : [],
+                  moota: Array.isArray(moota.methods) ? moota.methods : [],
+                  duitku: Array.isArray(duitku.methods) ? duitku.methods : [],
+                }}
+                editing={editingIds.includes(it.id)}
+                onToggleEdit={(id) => setEditingIds((list) => list.includes(id) ? list.filter(x=>x!==id) : [...list, id])}
+              />
+            ))}
+            {activePayments.length === 0 && (
+              <div className="p-4 text-sm text-slate-500">Belum ada item. Tambahkan dari gateway yang aktif.</div>
+            )}
+          </div>
+          <div className="mt-4">
+            <button
+              className="px-4 py-2 rounded border text-sm"
+              onClick={() => setActivePayments((arr) => {
+                const methodsMap = {
+                  midtrans: Array.isArray(midtrans.methods) ? midtrans.methods : [],
+                  xendit: Array.isArray(xendit.methods) ? xendit.methods : [],
+                  moota: Array.isArray(moota.methods) ? moota.methods : [],
+                  duitku: Array.isArray(duitku.methods) ? duitku.methods : [],
+                } as Record<string, string[]>;
+                const order: Array<keyof typeof methodsMap> = ['midtrans','xendit','moota','duitku'];
+                const gw = order.find(g => (methodsMap[g] || []).length > 0) || 'duitku';
+                const m = (methodsMap[gw] || [])[0] || '';
+                const methodLabels: Record<string, string> = { qris: 'QRIS', va_bca: 'VA BCA', va_bni: 'VA BNI', va_bri: 'VA BRI', va_permata: 'Permata VA', gopay: 'GoPay', shopeepay: 'ShopeePay', ovo: 'OVO', dana: 'Dana', linkaja: 'LinkAja', bank_transfer: 'Transfer Bank', duitku: 'Duitku' };
+                const label = gw === 'duitku' ? 'Duitku' : (methodLabels[m] || (m ? m : 'Metode'));
+                return ([...arr, { id: `${Date.now()}`, label, gateway: gw, method: m, logoUrl: '', enabled: true, sort: arr.length }]);
+              })}
+            >+ Tambah Item</button>
+          </div>
         </div>
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <GatewayCard
-          name="Midtrans"
-          docLink="https://midtrans.com/"
-          manageHref="/admin/payment-gateway/midtrans"
-          state={midtrans}
-          onToggle={() => toggleEnable("midtrans", midtrans, setMidtrans)}
-          keyStatus={midtransKeyStatus(midtrans.keys)}
-        />
-        <GatewayCard
-          name="Xendit"
-          docLink="https://xendit.co/"
-          manageHref="/admin/payment-gateway/xendit"
-          state={xendit}
-          onToggle={() => toggleEnable("xendit", xendit, setXendit)}
-          keyStatus={xenditKeyStatus(xendit.keys)}
-        />
-        <GatewayCard
-          name="Moota"
-          docLink="https://moota.co/"
-          manageHref="/admin/payment-gateway/moota"
-          state={moota}
-          onToggle={() => toggleEnable("moota", moota, setMoota)}
-          keyStatus={mootaKeyStatus(moota.keys)}
-        />
-      </div>
+      </section>
+
+  
     </div>
   );
 }
@@ -201,6 +236,7 @@ function ActivePaymentRow({ item, index, onChange, onMove, onDelete, methodsMap,
     dana: "Dana",
     linkaja: "LinkAja",
     bank_transfer: "Transfer Bank",
+    duitku: "Duitku",
   };
   const options = gwMethods[item.gateway] || [];
 
@@ -239,7 +275,7 @@ function ActivePaymentRow({ item, index, onChange, onMove, onDelete, methodsMap,
   <div className="flex-1 grid gap-3 items-end w-full md:[grid-template-columns:2fr_1fr_1fr_1.5fr]">
         <div>
           <div className="text-xs text-slate-500">Label</div>
-          <input value={item.label} onChange={(e) => onChange({ ...item, label: e.target.value })} className="w-full min-w-[200px] border rounded px-2 py-1.5 text-sm" disabled={!editing} />
+          <input value={item.label} onChange={(e) => onChange({ ...item, label: e.target.value })} className="w-full min-w-[200px] border border-slate-500 rounded px-2 py-1.5 text-sm placeholder:text-slate-600" placeholder="Label" disabled={!editing} />
         </div>
         <div>
           <div className="text-xs text-slate-500">Gateway</div>
@@ -251,12 +287,13 @@ function ActivePaymentRow({ item, index, onChange, onMove, onDelete, methodsMap,
               const nextMethod = newOptions.includes(item.method) ? item.method : (newOptions[0] || "");
               onChange({ ...item, gateway: gw, method: nextMethod });
             }}
-            className="w-full min-w-[140px] border rounded px-2 py-1.5 text-sm"
+            className="w-full min-w-[140px] border border-slate-500 rounded px-2 py-1.5 text-sm text-slate-700"
             disabled={!editing}
           >
             <option value="midtrans">Midtrans</option>
             <option value="xendit">Xendit</option>
             <option value="moota">Moota</option>
+            <option value="duitku">Duitku</option>
           </select>
         </div>
         <div>
@@ -264,7 +301,7 @@ function ActivePaymentRow({ item, index, onChange, onMove, onDelete, methodsMap,
           <select
             value={item.method}
             onChange={(e) => onChange({ ...item, method: e.target.value })}
-            className="w-full min-w-[180px] border rounded px-2 py-1.5 text-sm"
+            className="w-full min-w-[180px] border border-slate-500 rounded px-2 py-1.5 text-sm text-slate-700"
             disabled={!editing}
           >
             {options.length === 0 ? (
@@ -281,7 +318,7 @@ function ActivePaymentRow({ item, index, onChange, onMove, onDelete, methodsMap,
             <select
               value={item.feeType || 'flat'}
               onChange={(e) => onChange({ ...item, feeType: (e.target.value as 'flat'|'percent') })}
-              className="border rounded px-2 py-1.5 text-sm"
+              className="border border-slate-500 rounded px-2 py-1.5 text-sm text-slate-700"
               disabled={!editing}
             >
               <option value="flat">Nominal</option>
@@ -289,7 +326,7 @@ function ActivePaymentRow({ item, index, onChange, onMove, onDelete, methodsMap,
             </select>
             <input
               type="number"
-              className="w-28 border rounded px-2 py-1.5 text-sm"
+              className="w-28 border border-slate-500 rounded px-2 py-1.5 text-sm placeholder:text-slate-600"
               placeholder={item.feeType === 'percent' ? '0.5' : '1000'}
               value={typeof item.feeValue === 'number' ? item.feeValue : 0}
               onChange={(e) => onChange({ ...item, feeValue: Number(e.target.value) })}
@@ -398,4 +435,10 @@ function xenditKeyStatus(keys: Record<string, any>): { ok: boolean; text: string
 function mootaKeyStatus(keys: Record<string, any>): { ok: boolean; text: string } {
   const ak = typeof keys?.apiKey === "string" && keys.apiKey.trim().length > 0;
   return ak ? { ok: true, text: "Terisi" } : { ok: false, text: "Belum diisi" };
+}
+
+function duitkuKeyStatus(keys: Record<string, any>): { ok: boolean; text: string } {
+  if (!keys || Object.keys(keys).length === 0) return { ok: false, text: "Not configured" };
+  if (keys.apiKey && keys.merchantCode) return { ok: true, text: "Configured" };
+  return { ok: false, text: "Incomplete" };
 }

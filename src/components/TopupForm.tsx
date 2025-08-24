@@ -32,17 +32,20 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   const [selectedMethod, setSelectedMethod] = useState<string>("");
   const [showMethodModal, setShowMethodModal] = useState(false);
   const [activePaymentsUI, setActivePaymentsUI] = useState<Array<{ id: string; label: string; gateway: string; method: string; logoUrl?: string; enabled?: boolean; sort?: number; feeType?: 'flat'|'percent'; feeValue?: number }>>([]);
-  const [useGimcash, setUseGimcash] = useState(false);
+  const [useGimcash, setUseGimcash] = useState(false); // If true, override gateway/method with wallet
   const [showTopupInput, setShowTopupInput] = useState(false);
   const [topupAmount, setTopupAmount] = useState<number | ''>('');
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [methodFees, setMethodFees] = useState<Record<string, number>>({});
+  const [payNotice, setPayNotice] = useState("");
   const lastChosenKindRef = useRef<'qris' | 'emoney' | 'va' | 'transfer' | ''>('');
   const formRef = useRef<HTMLFormElement | null>(null);
   const [showPageLoading, setShowPageLoading] = useState(false);
 
   // Derive current gateway fee based on Active Payments config; fallback to methodFees map
   const computeGatewayFee = (base: number) => {
+    // GimCash (wallet) always 0 fee regardless of selected method state
+    if (useGimcash) return 0;
     const ap = activePaymentsUI.find((it) => it && it.enabled !== false && it.gateway === selectedGateway && it.method === selectedMethod);
     if (ap) {
       const feeType = ap.feeType === 'percent' ? 'percent' : 'flat';
@@ -170,9 +173,34 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
     return () => { ignore = true; };
   }, [showMethodModal, sessionEmail]);
 
+  // Load wallet balance early (initial mount) to allow auto-select GimCash when cukup
+  useEffect(() => {
+    if (!sessionEmail) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/wallet/me', { cache: 'no-store' });
+        const j = await res.json();
+        if (cancelled) return;
+        const bal = typeof j?.balance === 'number' ? j.balance : 0;
+        setWalletBalance(bal);
+        const need = (selectedPrice != null ? selectedPrice : price) || 0;
+        if (bal >= need && need > 0) setUseGimcash(true);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [sessionEmail, selectedPrice, price]);
+
+  // If variant price changes to exceed balance, auto-disable GimCash
+  useEffect(() => {
+    if (useGimcash && walletBalance != null && selectedPrice != null && walletBalance < selectedPrice) {
+      setUseGimcash(false);
+    }
+  }, [walletBalance, selectedPrice, useGimcash]);
+
   function beginPayment() {
     // If not logged in, show login prompt
-    if (!sessionEmail) {
+  if (!sessionEmail) {
       // Persist current inputs so they survive the OAuth redirect
       try {
         if (typeof window !== 'undefined') {
@@ -197,6 +225,9 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   }
 
   function chooseActivePayment(item: { gateway: string; method: string }) {
+    // Memilih metode lain otomatis menonaktifkan GimCash agar tidak override
+    if (useGimcash) setUseGimcash(false);
+    if (payNotice) setPayNotice("");
     const kind = methodToKind(item.method);
     lastChosenKindRef.current = kind;
     setSelectedGateway(item.gateway);
@@ -391,8 +422,13 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
       variantLabel: chosenVariant?.label || null,
       variantPrice: typeof chosenVariant?.price === 'number' ? chosenVariant?.price : price,
     };
-  if (selectedGateway) data.gateway = selectedGateway;
-  if (selectedMethod) data.method = selectedMethod;
+  if (useGimcash) {
+    data.gateway = 'wallet';
+    data.method = 'gimcash';
+  } else {
+    if (selectedGateway) data.gateway = selectedGateway;
+    if (selectedMethod) data.method = selectedMethod;
+  }
 
     let result: any = {};
     try {
@@ -644,27 +680,28 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   {/* Payment method selector (compact, like variant) */}
   {!hidePaymentMethods && (
         <div>
-          <div className="mb-2 text-sm font-medium text-slate-700">Metode Pembayaran</div>
+          <div className="mb-2 text-sm font-medium text-slate-700">Metode Pembayaran{useGimcash && ' • GimCash'}</div>
+          {payNotice && <div className="mb-2 text-xs text-red-600">{payNotice}</div>}
           {(() => {
             const apList = activePaymentsUI.filter((ap) => ap && ap.enabled !== false);
             const current = apList.find((ap) => ap.gateway === selectedGateway && ap.method === selectedMethod) || apList[0] || null;
             const kind = current ? methodToKind(current.method) : methodToKind(selectedMethod || '');
             const fallbackIcon = kind === 'transfer' ? '/images/iconpayment/bank.png' : kind === 'va' ? '/images/iconpayment/va.png' : '/images/iconpayment/qris.png';
             const base = selectedPrice ?? 0;
-            const fee = current
+            const fee = useGimcash ? 0 : (current
               ? (current.feeType === 'percent' ? Math.round(base * (Number(current.feeValue || 0) / 100)) : Math.round(Number(current.feeValue || 0)))
-              : Math.round(Number(methodFees[selectedMethod] || 0));
+              : Math.round(Number(methodFees[selectedMethod] || 0)));
             const total = base + (isFinite(fee) ? fee : 0);
-            const label = current ? (current.label || `${current.gateway}/${current.method}`) : (selectedMethod || 'Pilih metode');
+      const label = useGimcash ? 'GimCash' : (current ? (current.label || `${current.gateway}/${current.method}`) : (selectedMethod || 'Pilih metode'));
             return (
               <button
                 type="button"
-                onClick={() => setShowMethodModal(true)}
+        onClick={() => setShowMethodModal(true)}
                 className={`w-full rounded-lg border px-3 py-3 text-left transition shadow-sm bg-white border-slate-300 hover:border-slate-400`}
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <img src={current?.logoUrl || fallbackIcon} alt={label} className="w-9 h-9 object-contain" />
+          <img src={useGimcash ? '/images/logo/logo128.png' : (current?.logoUrl || fallbackIcon)} alt={label} className="w-9 h-9 object-contain" />
                     <div>
                       <div className="text-[15px] font-semibold text-slate-900 leading-tight mb-0 truncate">{label}</div>
                       <div className="text-xs text-slate-600 mt-0">
@@ -720,7 +757,32 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                 {/* Header: Dompet */}
                 <div className="text-[12px] font-medium text-slate-500 uppercase tracking-wide mb-2">Dompet</div>
                 {/* GimCash row */}
-                <div className="mb-3 flex items-center justify-between rounded-lg border border-slate-200 p-3">
+                <div
+                  className={`mb-3 flex items-center justify-between rounded-lg border p-3 cursor-pointer hover:bg-slate-50 ${useGimcash ? 'border-blue-400 bg-blue-50/40' : 'border-slate-200'}`}
+                  onClick={(e) => {
+                    const target = e.target as HTMLElement;
+                    if (target.closest('[data-role="gimcash-topup"]')) return;
+                    const need = selectedPrice ?? null;
+                    // Only enforce insufficient logic if a price is chosen
+                    if (need != null && (walletBalance ?? -1) < need) {
+                      // Close modal & show notice
+                      setShowMethodModal(false);
+                      setUseGimcash(false);
+                      setPayNotice('Saldo GimCash tidak cukup. Topup atau pilih metode lain.');
+                      return;
+                    }
+                    // If already using GimCash, just close modal (don't unselect)
+                    if (useGimcash) {
+                      setShowMethodModal(false);
+                      if (payNotice) setPayNotice('');
+                      return;
+                    }
+                    // Activate GimCash
+                    setUseGimcash(true);
+                    setShowMethodModal(false);
+                    if (payNotice) setPayNotice('');
+                  }}
+                >
                   <div className="flex items-center gap-3 min-w-0">
                     <img src="/images/logo/logo128.png" alt="GimCash" className="object-contain" style={{ width: 36, height: 36 }} />
                     <div className="min-w-0">
@@ -728,6 +790,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                       <div className="mt-1">
                         {!showTopupInput ? (
                           <button
+                            data-role="gimcash-topup"
                             type="button"
                             onClick={() => setShowTopupInput(true)}
                             className="text-[11px] px-2 py-0.5 rounded border border-blue-600 text-blue-700 hover:bg-blue-50"
@@ -762,6 +825,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                               {[10000, 20000, 50000, 100000].map((amt) => (
                                 <button
                                   key={amt}
+                                  data-role="gimcash-topup"
                                   type="button"
                                   onClick={() => setTopupAmount(amt)}
                                   className="text-[11px] px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-50"
@@ -775,19 +839,21 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[12px] text-slate-700 min-w-[120px] text-right">
-                      {selectedPrice != null ? (() => { const fee = computeGatewayFee(selectedPrice || 0); const total = (selectedPrice || 0) + fee; return `Rp ${Number(total).toLocaleString()}`; })() : '—'}
+                      {selectedPrice != null ? `Rp ${Number(selectedPrice).toLocaleString()}` : '—'}
                     </span>
                     {(() => {
                       const canUse = (walletBalance ?? -1) >= (selectedPrice ?? Number.POSITIVE_INFINITY);
-                      if (canUse) {
-                        return (
-                          <label className="inline-flex items-center gap-2 text-[12px] text-slate-700">
-                            <input type="checkbox" checked={useGimcash} onChange={(e) => setUseGimcash(e.target.checked)} />
-                            <span>Gunakan</span>
-                          </label>
-                        );
-                      }
-                      return null; // Hide insufficient balance message as requested
+                      if (!canUse) return null;
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setUseGimcash(v => !v)}
+                          className="w-6 h-6 flex items-center justify-center"
+                          aria-label={useGimcash ? 'Batalkan GimCash' : 'Pakai GimCash'}
+                        >
+                          <span className={`w-4 h-4 inline-block rounded-full border transition ${useGimcash ? 'bg-blue-500 border-blue-600' : 'border-slate-300'}`} />
+                        </button>
+                      );
                     })()}
                   </div>
                 </div>
@@ -805,9 +871,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                     const gw = gateways.find(g => g.name === ap.gateway);
                     return !!gw && gw.enabled && Array.isArray(gw.methods) && gw.methods.includes(ap.method);
                   });
-                  const recommended = !canUse ? (allowed.find((ap) => methodToKind(ap.method) === 'qris')?.id || null) : null;
-                  // expose in window for optional debugging (no side effects)
-                  (typeof window !== 'undefined') && ((window as any).__apRecommended = recommended);
+                  // recommended logic removed; single selection only
                   return null;
                 })()}
 
@@ -835,7 +899,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                             ? Math.round(base * (Number(ap.feeValue || 0) / 100))
                             : ((ap.feeValue ?? Number(methodFees[ap.method] || 0)) || 0);
                           const total = base + fee;
-                          const rec = (typeof window !== 'undefined') ? ((window as any).__apRecommended === ap.id) : false;
+                          const selected = !useGimcash && selectedGateway === ap.gateway && selectedMethod === ap.method;
                           return (
                             <button key={ap.id} type="button" onClick={() => chooseActivePayment(ap)} className="w-full bg-white hover:bg-slate-50">
                               <div className="flex items-center justify-between gap-2 px-3 py-2.5 text-[13px]">
@@ -845,7 +909,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                                 </span>
                                 <span className="flex items-center gap-3">
                                   <span className="text-[12px] text-slate-700 min-w-[96px] text-right">{selectedPrice != null ? `Rp ${total.toLocaleString()}` : '—'}</span>
-                                  <span className={`w-4 h-4 inline-block rounded-full border ${rec ? 'bg-blue-500 border-blue-600' : 'border-slate-300'}`} />
+                                  <span className={`w-4 h-4 inline-block rounded-full border transition ${selected ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`} />
                                 </span>
                               </div>
                             </button>
@@ -878,7 +942,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                             ? Math.round(base * (Number(ap.feeValue || 0) / 100))
                             : ((ap.feeValue ?? Number(methodFees[ap.method] || 0)) || 0);
                           const total = base + fee;
-                          const rec = (typeof window !== 'undefined') ? ((window as any).__apRecommended === ap.id) : false;
+                          const selected = !useGimcash && selectedGateway === ap.gateway && selectedMethod === ap.method;
                           return (
                             <button key={ap.id} type="button" onClick={() => chooseActivePayment(ap)} className="w-full bg-white hover:bg-slate-50">
                               <div className="flex items-center justify-between gap-2 px-3 py-2.5 text-[13px]">
@@ -888,7 +952,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                                 </span>
                                 <span className="flex items-center gap-3">
                                   <span className="text-[12px] text-slate-700 min-w-[96px] text-right">{selectedPrice != null ? `Rp ${total.toLocaleString()}` : '—'}</span>
-                                  <span className={`w-4 h-4 inline-block rounded-full border ${rec ? 'bg-blue-500 border-blue-600' : 'border-slate-300'}`} />
+                                  <span className={`w-4 h-4 inline-block rounded-full border transition ${selected ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`} />
                                 </span>
                               </div>
                             </button>

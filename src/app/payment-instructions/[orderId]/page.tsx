@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, use as usePromise } from "react";
+import LoadingOverlay from "@/components/LoadingOverlay";
 import { useRouter } from "next/navigation";
 
 function formatRupiah(n?: number) {
@@ -10,6 +11,7 @@ function formatRupiah(n?: number) {
 
 function normalizeMethod(method?: string) {
   const m = String(method || "").toLowerCase();
+  if (m === 'wallet' || m === 'gimcash') return 'gimcash';
   if (m.includes("qris") || /\bqr\b/.test(m)) return "qris";
   // Bank transfer synonyms: rekening/rek, tf, bank names
   if (
@@ -139,6 +141,7 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
   }, [payment?.method, intentMethod]);
   const icon = useMemo(() => {
     const method = String(methodNorm || "");
+  if (method === 'gimcash') return '/images/logo/logo128.png';
     if (method === "qris") return "/images/iconpayment/qris.png";
     if (method === "bank_transfer") return "/images/iconpayment/bank.png";
     if (method === "va") return "/images/iconpayment/va.png";
@@ -147,6 +150,7 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
   }, [methodNorm]);
 
   const methodLabel = useMemo(() => {
+  if (methodNorm === 'gimcash') return 'GimCash';
     if (methodNorm === 'bank_transfer') return 'Transfer Bank (BCA)';
     if (methodNorm === 'qris') return 'QRIS';
     if (methodNorm === 'va') return 'Virtual Account';
@@ -157,19 +161,7 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
   // Always compute unique amount hook before any conditional returns to preserve hook order
   const { amountWithCode, code } = useMemo(() => computeUniqueAmount(payment?.amount, orderId), [payment?.amount, orderId]);
 
-  if (loading) {
-    return (
-      <main className="min-h-screen pb-24">
-        <div className="mx-auto max-w-md px-4 pt-6">
-          <div className="rounded-xl border border-slate-200 bg-[#fefefe] p-5">
-            <div className="h-5 w-40 bg-slate-100 rounded mb-3" />
-            <div className="h-6 w-28 bg-slate-100 rounded mb-2" />
-            <div className="h-16 w-full bg-slate-100 rounded" />
-          </div>
-        </div>
-      </main>
-    );
-  }
+  if (loading) return <LoadingOverlay label="Memuat data transaksi..." />;
   if (error) {
     return (
       <main className="min-h-screen pb-24">
@@ -309,7 +301,7 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
                       const logoLoaded = await new Promise<HTMLImageElement>((resolve, reject) => {
                         logoImg.onload = () => resolve(logoImg);
                         logoImg.onerror = reject;
-                        logoImg.src = '/images/logo/gimbox.gif';
+                        logoImg.src = '/images/logo/logo-onlt.png';
                       });
                       // Draw onto canvas and export as JPG
                       const size = 512;
@@ -395,7 +387,7 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
                           />
                           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                             <div className="flex items-center justify-center bg-white/95 rounded-lg" style={{ width: 50, height: 50 }}>
-                              <img src="/images/logo/gimbox.gif" alt="Gimbox" className="w-11 h-11 object-contain" />
+                              <img src="/images/logo/logo-onlt.png" alt="Gimcash" className="w-11 h-11 object-contain" />
                             </div>
                           </div>
                         </div>

@@ -107,6 +107,27 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Wallet (GimCash) orders should already be paid instantly
+    if (gateway === 'wallet' || gateway === 'gimcash') {
+      return NextResponse.json({
+        success: true,
+        status: statusStr === 'expired' ? 'expired' : (isPending ? 'pending' : 'success'),
+        method: 'gimcash',
+        amount: sellPrice,
+        productCode: (order as any).productCode,
+        productLabel: (order as any).productLabel,
+        variantLabel: (order as any).variantLabel,
+        variantPrice: (order as any).variantPrice,
+        baseAmount,
+        feesTotal,
+        feesGateway,
+        feesAdmin,
+        feesOther,
+        feePercent,
+        expiresAt: expiresAt.toISOString(),
+      });
+    }
+
     if (gateway !== "midtrans") {
       return NextResponse.json({ success: false, message: `Gateway ${gateway} belum didukung untuk lanjut bayar` }, { status: 400 });
     }

@@ -58,6 +58,83 @@ export async function POST(req: NextRequest) {
   const otherFee: number = typeof body?.otherFee === "number" ? body.otherFee : 0;
   const totalSellPrice = Math.max(0, Number(basePrice) + Number(gatewayFee));
 
+  // Wallet (GimCash) immediate payment branch
+  if (gateway === 'wallet' || gateway === 'gimcash') {
+    try {
+      const db = await getDb();
+      // Basic validation
+      if (!email) return Response.json({ success: false, message: 'Email diperlukan untuk pembayaran GimCash' }, { status: 400 });
+      if (!userId) return Response.json({ success: false, message: 'User ID diperlukan' }, { status: 400 });
+      // Fetch wallet
+      const wallet = await db.collection('wallets').findOne({ email });
+      const balance: number = typeof wallet?.balance === 'number' ? wallet.balance : 0;
+      if (balance < totalSellPrice) {
+        return Response.json({ success: false, message: 'Saldo GimCash tidak cukup' }, { status: 400 });
+      }
+      const orderId = Date.now().toString();
+      // Atomic deduction & order creation inside a transaction-like flow
+      const sessionDb = db; // (no multi-doc transaction needed if same db; we do ordered operations)
+      const newBalance = balance - totalSellPrice;
+      // Optimistic update using balance match to prevent race deduction
+      const upd = await sessionDb.collection('wallets').updateOne({ email, balance }, { $set: { balance: newBalance, updatedAt: new Date() } });
+      let finalBalance = newBalance;
+      if (upd.modifiedCount !== 1) {
+        // Race condition: retry once
+        const fresh = await sessionDb.collection('wallets').findOne({ email });
+        const freshBal = typeof fresh?.balance === 'number' ? fresh.balance : 0;
+        if (freshBal < totalSellPrice) {
+          return Response.json({ success: false, message: 'Saldo GimCash tidak cukup' }, { status: 400 });
+        }
+        const upd2 = await sessionDb.collection('wallets').updateOne({ email, balance: freshBal }, { $set: { balance: freshBal - totalSellPrice, updatedAt: new Date() } });
+        if (upd2.modifiedCount !== 1) {
+          return Response.json({ success: false, message: 'Gagal memperbarui saldo. Coba lagi.' }, { status: 500 });
+        }
+        finalBalance = freshBal - totalSellPrice;
+      }
+      await sessionDb.collection('orders').insertOne({
+        orderId,
+        provider,
+        paymentGateway: 'wallet',
+        method: method || 'gimcash',
+        code,
+        productCode: productCode || code,
+        productLabel: productLabel || code,
+        variantLabel: variantLabel || null,
+        variantPrice: typeof variantPrice === 'number' ? variantPrice : price,
+        userId,
+        email,
+        nominal,
+        sellPrice: totalSellPrice,
+        buyPrice,
+        fees: { admin: adminFee, gateway: 0, other: otherFee, total: Number(adminFee + otherFee) },
+        details: { wallet: { deducted: totalSellPrice } },
+        status: 'paid', // instantly paid
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      // Log wallet transaction (debit)
+      try {
+        const now = new Date();
+        await sessionDb.collection('wallet_transactions').insertOne({
+          orderId,
+          email,
+          amount: -Math.abs(totalSellPrice), // store debit as negative
+          type: 'purchase',
+          note: productLabel || productCode || code || 'purchase',
+          balanceAfter: finalBalance,
+          createdAt: now,
+          date: now,
+        });
+      } catch (e:any) {
+        // Ensure index exists (best-effort)
+        try { await sessionDb.collection('wallet_transactions').createIndex({ email: 1, createdAt: -1 }); } catch {}
+      }
+      return Response.json({ success: true, message: 'Pembayaran berhasil dengan GimCash', orderId });
+    } catch (e: any) {
+      return Response.json({ success: false, message: 'Gagal memproses pembayaran GimCash', error: e?.message || 'wallet' }, { status: 500 });
+    }
+  }
+
   // 1. Order ke Digiflazz (dummy, bisa diaktifkan)
   const sign = getSignature(USERNAME!, API_KEY!, code, userId);
   const digiflazzPayload = {

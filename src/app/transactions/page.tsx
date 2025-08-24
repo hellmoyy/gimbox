@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import LoadingOverlay from "@/components/LoadingOverlay";
 import { useSession } from "next-auth/react";
 
 type DummyTxn = {
@@ -27,6 +28,8 @@ export default function TransactionsPage() {
   const [active, setActive] = useState<null | "Pending" | "Diproses" | "Sukses" | "Gagal">(null);
   const [selected, setSelected] = useState<null | DummyTxn>(null);
   const [items, setItems] = useState<DummyTxn[]>([]);
+  const [loading, setLoading] = useState<boolean>(true); // start in loading state
+  const [hasLoaded, setHasLoaded] = useState<boolean>(false);
   const [hasAny, setHasAny] = useState<boolean>(false);
   const renderStatusLabel = (s: DummyTxn["status"]) => (s === "Pending" ? "Menunggu\nPembayaran" : s);
   function normalizeMethod(method?: string): 'qris' | 'emoney' | 'va' | 'transfer' | '' {
@@ -59,12 +62,14 @@ export default function TransactionsPage() {
     let ignore = false;
     async function load() {
       try {
+        setLoading(true);
         const q = active ? `?status=${encodeURIComponent(active)}` : "";
         const res = await fetch(`/api/transactions/me${q}`, { cache: "no-store" });
         if (!res.ok) return;
   const data = await res.json();
   if (!ignore && Array.isArray(data.items)) setItems(data.items);
-      } catch {}
+  } catch {}
+  finally { if (!ignore) { setLoading(false); setHasLoaded(true); } }
     }
     if (session) load();
     return () => { ignore = true; };
@@ -132,7 +137,8 @@ export default function TransactionsPage() {
             </div>
           </>
         )}
-        {!hasAny ? (
+  {loading && <LoadingOverlay label="Memuat transaksi..." zIndex={50} size={64} />}
+  {!loading && hasLoaded && !hasAny && (
           <div className="min-h-[60vh] flex items-center justify-center">
             <div className="text-center">
               <div className="mx-auto mb-3 h-12 w-12 text-slate-300">
@@ -145,7 +151,8 @@ export default function TransactionsPage() {
               <div className="mt-1 text-xs text-slate-500">Pesananmu akan tampil di sini.</div>
             </div>
           </div>
-        ) : (
+        )}
+        {!loading && hasAny && (
           <div className="rounded-xl border border-slate-200 bg-[#fefefe] overflow-hidden">
             <table className="w-full text-sm text-slate-800">
               <thead>
