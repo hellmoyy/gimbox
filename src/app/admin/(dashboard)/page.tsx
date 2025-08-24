@@ -8,7 +8,7 @@ export default function AdminDashboard() {
   <Link href="/admin/products" className="p-4 rounded-xl border border-slate-300 bg-[#fefefe] text-slate-900 hover:border-slate-400 hover:shadow">Kelola Produk</Link>
   <Link href="/admin/categories" className="p-4 rounded-xl border border-slate-300 bg-[#fefefe] text-slate-900 hover:border-slate-400 hover:shadow">Kategori</Link>
   <Link href="/admin/settings" className="p-4 rounded-xl border border-slate-300 bg-[#fefefe] text-slate-900 hover:border-slate-400 hover:shadow">Pengaturan</Link>
-  <Link href="/admin/orders" className="p-4 rounded-xl border border-slate-300 bg-[#fefefe] text-slate-900 hover:border-slate-400 hover:shadow">Pesanan</Link>
+  <Link href="/admin/transactions" className="p-4 rounded-xl border border-slate-300 bg-[#fefefe] text-slate-900 hover:border-slate-400 hover:shadow">Transaksi</Link>
       </div>
     </div>
   );
