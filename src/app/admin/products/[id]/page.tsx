@@ -1,9 +1,7 @@
 import { ObjectId } from "mongodb";
 import Link from "next/link";
 import { getDb } from "../../../../lib/mongodb";
-import ProductImageUploader from "@/components/admin/ProductImageUploader";
 import VariantsEditor from "@/components/admin/VariantsEditor";
-import { getCategories } from "@/lib/categories";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -23,10 +21,8 @@ export default async function ProductEditor({ params }: Params) {
   }
 
   const action = creating ? "/api/admin/products" : `/api/admin/products/${id}`;
-  let categories: any[] = [];
-  try {
-    categories = await getCategories({});
-  } catch {}
+  // Fetch brands for selection
+  const brands = await db.collection('brands').find({ isActive: { $ne: false } }).project({ _id:1, code:1, name:1 }).sort({ name:1 }).toArray();
 
   return (
   <main className="">
@@ -36,71 +32,37 @@ export default async function ProductEditor({ params }: Params) {
       <Link href="/admin/products" className="text-sm text-slate-700">← Kembali</Link>
         </div>
 
-  <form action={action} method="post" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-900">Nama</label>
-              <input name="name" defaultValue={item?.name || ""} className="mt-1 w-full border border-slate-300 rounded px-3 py-2 text-slate-900 bg-[#fefefe]" required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-900">Kode</label>
-              <input name="code" defaultValue={item?.code || ""} className="mt-1 w-full border border-slate-300 rounded px-3 py-2 text-slate-900 bg-[#fefefe]" required />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-900">Icon (path relatif di /public, contoh: /images/games/mobile-legends.jpg)</label>
-              <input name="icon" defaultValue={item?.icon || ""} className="mt-1 w-full border border-slate-300 rounded px-3 py-2 text-slate-900 bg-[#fefefe]" />
-              <div className="mt-2">
-                <ProductImageUploader defaultFolder="products" defaultName={item?.code || "produk"} onUploadedFieldName="icon" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-900">Kategori</label>
-              <select name="category" defaultValue={item?.category || (categories[0]?.code || "game")} className="mt-1 w-full border border-slate-300 rounded px-3 py-2 text-slate-900 bg-[#fefefe]">
-                {categories.length === 0 ? (
-                  <>
-                    <option value="game">Game</option>
-                    <option value="voucher">Voucher</option>
-                  </>
-                ) : (
-                  categories.map((c: any) => (
-                    <option key={c._id} value={c.code || c.name}>{c.name}</option>
-                  ))
-                )}
-              </select>
-            </div>
-            <div className="flex flex-wrap items-center gap-6">
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" name="featured" defaultChecked={!!item?.featured} />
-                <span className="text-slate-900">Populer</span>
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" name="newRelease" defaultChecked={!!item?.newRelease} />
-                <span className="text-slate-900">Baru Rilis</span>
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" name="voucher" defaultChecked={!!item?.voucher} />
-                <span className="text-slate-900">Voucher</span>
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" name="pulsaTagihan" defaultChecked={!!item?.pulsaTagihan} />
-                <span className="text-slate-900">Pulsa & Tagihan</span>
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" name="entertainment" defaultChecked={!!item?.entertainment} />
-                <span className="text-slate-900">Entertainment</span>
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" name="isActive" defaultChecked={(item?.isActive ?? true) !== false} />
-                <span className="text-slate-900">Aktif</span>
-              </label>
-            </div>
+      <form action={action} method="post" className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-slate-900">Nama Paket / Nominal</label>
+            <input name="name" defaultValue={item?.name || ""} className="mt-1 w-full border border-slate-300 rounded px-3 py-2 text-slate-900 bg-[#fefefe]" required />
+            <p className="text-[11px] text-slate-500 mt-1">Contoh: 86 Diamonds, Weekly Pass, 120 UC</p>
           </div>
-
-          <div className="pt-2 flex items-center gap-3">
-            <button className="bg-indigo-600 text-white px-4 py-2 rounded">Simpan</button>
+          <div>
+            <label className="block text-sm font-medium text-slate-900">Brand (Game)</label>
+            <select name="brandKey" defaultValue={item?.brandKey || brands[0]?.code} className="mt-1 w-full border border-slate-300 rounded px-3 py-2 bg-[#fefefe] text-slate-900" required>
+              {brands.map((b:any)=>(<option key={b._id} value={b.code}>{b.name}</option>))}
+            </select>
+            <p className="text-[11px] text-slate-500 mt-1">Icon & kategori otomatis dari brand.</p>
           </div>
-          <VariantsEditor initialVariants={item?.variants || []} fieldName="variants" />
-        </form>
+          <div>
+            <label className="block text-sm font-medium text-slate-900">Kode (opsional)</label>
+            <input name="code" defaultValue={item ? item.code.replace(/^.*?-/, '') : ''} className="mt-1 w-full border border-slate-300 rounded px-3 py-2 bg-[#fefefe] text-slate-900" placeholder="Jika kosong diambil dari nama" />
+            <p className="text-[11px] text-slate-500 mt-1">Akan menjadi brandKey-kode.</p>
+          </div>
+          <div className="flex items-center gap-2 mt-2 md:col-span-3">
+            <label className="inline-flex items-center gap-2">
+              <input type="checkbox" name="isActive" defaultChecked={(item?.isActive ?? true) !== false} />
+              <span className="text-slate-900 text-sm">Aktif</span>
+            </label>
+          </div>
+        </div>
+        <VariantsEditor initialVariants={item?.variants || []} fieldName="variants" />
+        <div className="pt-2 flex items-center gap-3">
+          <button className="bg-indigo-600 text-white px-5 py-2 rounded">Simpan</button>
+        </div>
+      </form>
       </div>
     </main>
   );

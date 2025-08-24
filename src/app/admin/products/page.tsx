@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getDb } from "../../../lib/mongodb";
 import DeleteButton from "@/components/admin/DeleteButton";
-import FullSyncButton from '@/components/admin/FullSyncButton';
 
 type QueryParams = { imported?: string; provider?: string; synced?: string };
 
@@ -11,7 +10,7 @@ export default async function AdminProducts({ searchParams }: { searchParams: Pr
   let items: any[] = [];
   try {
     const db = await getDb();
-    items = await db.collection("products").find({}).sort({ name: 1 }).toArray();
+  items = await db.collection("products").find({}).sort({ brandKey: 1, name: 1 }).toArray();
   } catch (e) {
     return (
       <div className="w-full">
@@ -40,8 +39,6 @@ export default async function AdminProducts({ searchParams }: { searchParams: Pr
         <div className="flex items-center gap-2">
           <Link href="/admin/products/[id]" as="/admin/products/new" className="bg-green-600 text-white px-3 py-2 rounded">Tambah</Link>
           <Link href="/admin/products/import-new" className="bg-emerald-600 text-white px-3 py-2 rounded">Import Produk Baru</Link>
-          <Link href="/admin/products/sync" className="bg-indigo-600 text-white px-3 py-2 rounded">Sync Harga</Link>
-          <FullSyncButton />
         </div>
       </div>
       {imported > 0 && (
@@ -57,38 +54,26 @@ export default async function AdminProducts({ searchParams }: { searchParams: Pr
       <div className="rounded-xl border overflow-x-auto w-full">
         <table className="min-w-full w-full table-auto text-sm text-slate-800">
           <thead>
-            <tr className="bg-slate-100 text-left text-slate-900">
-                <th className="p-3">Nama</th>
-                <th className="p-3">Kode</th>
-                <th className="p-3">Provider</th>
+              <tr className="bg-slate-100 text-left text-slate-900">
                 <th className="p-3">Brand</th>
-                <th className="p-3">Kategori</th>
+                <th className="p-3">Nama Paket</th>
+                <th className="p-3">Kode</th>
                 <th className="p-3">Harga (Cost→Price)</th>
                 <th className="p-3">Status</th>
                 <th className="p-3">Aksi</th>
-            </tr>
+              </tr>
           </thead>
           <tbody>
             {items.map((it: any) => (
               <tr key={it._id} className="border-t bg-[#fefefe]">
-                <td className="p-3 max-w-[220px]"><div className="truncate" title={it.name}>{it.name}</div></td>
-                <td className="p-3 font-mono text-xs">{it.code}</td>
-                <td className="p-3 text-xs">{it.provider || '-'}</td>
-                <td className="p-3 text-xs">{it.brandKey || '-'}</td>
-                <td className="p-3 text-xs">{it.category || 'game'}</td>
+                <td className="p-3 text-xs font-medium">{it.brandKey}</td>
+                <td className="p-3 max-w-[240px]"><div className="truncate" title={it.name}>{it.name}</div></td>
+                <td className="p-3 font-mono text-[11px]">{it.code}</td>
                 <td className="p-3 text-xs">{typeof it.cost === 'number' ? `${it.cost} → ${it.price ?? '-'}` : '-'}</td>
-                <td className="p-3">
-                  <div className="flex flex-col gap-1">
-                    <span className={`w-fit px-2 py-0.5 rounded text-xs ${it.isActive === false ? 'bg-red-600/10 text-red-700' : 'bg-green-600/10 text-green-700'}`}>{it.isActive === false ? 'Nonaktif' : 'Aktif'}</span>
-                    {it.featured ? <span className="w-fit px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-700">Populer</span> : null}
-                  </div>
-                </td>
+                <td className="p-3"><span className={`w-fit px-2 py-0.5 rounded text-xs ${it.isActive === false ? 'bg-red-600/10 text-red-700' : 'bg-green-600/10 text-green-700'}`}>{it.isActive === false ? 'Nonaktif' : 'Aktif'}</span></td>
                 <td className="p-3">
                   <div className="flex flex-col gap-1">
                     <Link href={`/admin/products/${it._id}`} className="text-indigo-600 hover:underline">Edit</Link>
-                    <form action={`/api/admin/products/${it._id}/duplicate`} method="post">
-                      <button type="submit" className="text-slate-600 hover:underline">Duplikat</button>
-                    </form>
                     <DeleteButton actionUrl={`/api/admin/products/${it._id}`} confirmText="Hapus produk ini?" />
                   </div>
                 </td>

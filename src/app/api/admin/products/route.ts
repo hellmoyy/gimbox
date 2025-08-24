@@ -2,21 +2,30 @@ import { NextRequest } from "next/server";
 import { getDb } from "../../../../lib/mongodb";
 import { ensureAdminRequest } from "@/lib/adminAuth";
 
+function slugify(v: string) {
+  return v.toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+}
+
 export async function POST(req: NextRequest) {
   if (!ensureAdminRequest(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const form = await req.formData();
+  const name = String(form.get("name") || "").trim();
+  const brandKey = String(form.get("brandKey") || "").trim();
+  if (!brandKey) return Response.json({ error: "brandKey required" }, { status: 400 });
+  let rawCode = String(form.get("code") || "").trim();
+  if (!rawCode) rawCode = slugify(name);
+  // final code pattern brandKey-rawCode (lowercase)
+  const code = `${brandKey}-${slugify(rawCode)}`.toLowerCase();
   const doc: any = {
-    name: String(form.get("name") || ""),
-    code: String(form.get("code") || ""),
-    icon: String(form.get("icon") || ""),
-    category: String(form.get("category") || "game"),
-  categories: [String(form.get("category") || "game"), 'semua-produk'],
-    featured: form.get("featured") === "on",
-  newRelease: form.get("newRelease") === "on",
-  voucher: form.get("voucher") === "on",
-  pulsaTagihan: form.get("pulsaTagihan") === "on",
-  entertainment: form.get("entertainment") === "on",
+    name,
+    code,
+    brandKey,
+    gameCode: brandKey,
+    category: brandKey,
+    categories: [brandKey, 'semua-produk'],
     isActive: form.get("isActive") === "on",
+    createdAt: new Date(),
+    updatedAt: new Date(),
   };
   const variantsRaw = form.get("variants");
   if (typeof variantsRaw === "string") {
@@ -36,18 +45,6 @@ export async function POST(req: NextRequest) {
   }
   try {
     const db = await getDb();
-    // Handle new category creation if provided
-    const newCategoryName = String(form.get("newCategoryName") || "").trim();
-    if (newCategoryName) {
-      const code = newCategoryName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-      await db.collection("categories").updateOne(
-        { code },
-        { $set: { name: newCategoryName, code, isActive: true } },
-        { upsert: true }
-      );
-      doc.category = code;
-      doc.categories = [code, 'semua-produk'];
-    }
     // Ensure universal category exists
     try { await db.collection('categories').updateOne({ code: 'semua-produk' }, { $set: { code: 'semua-produk', name: 'Semua Produk', isActive: true } }, { upsert: true }); } catch {}
     await db.collection("products").insertOne(doc);
@@ -55,5 +52,5 @@ export async function POST(req: NextRequest) {
     const msg = e?.name === "MongoServerSelectionError" ? "Database unavailable" : "DB error";
     return Response.json({ error: msg }, { status: 503 });
   }
-  return Response.redirect(new URL("/admin/products", req.url));
+  return Response.redirect(new URL(`/admin/products?created=1&brand=${encodeURIComponent(doc.brandKey)}`, req.url));
 }
