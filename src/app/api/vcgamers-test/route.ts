@@ -91,11 +91,11 @@ export async function GET(req: NextRequest) {
     // Probe brand listing endpoint: /v2/public/brands?sign=...
     const apiKey = process.env.VCGAMERS_API_KEY || '';
     const secret = process.env.VCGAMERS_SECRET_KEY || '';
-    const bases = [
+    const bases = Array.from(new Set([
       (process.env.VCGAMERS_BASE_URL || '').replace(/\/$/, '') || 'https://mitra-api.vcgamers.com',
       'https://mitra-api.vcgamers.com',
       'https://sandbox-api.vcgamers.com'
-    ];
+    ]));
     const signCandidates: Array<{label:string;value:string}> = [];
     if (secret) signCandidates.push({ label: 'secret', value: secret });
     if (apiKey) signCandidates.push({ label: 'apiKey', value: apiKey });
@@ -105,32 +105,53 @@ export async function GET(req: NextRequest) {
       const ts = Math.floor(Date.now()/1000).toString();
       signCandidates.push({ label: 'hmac(secret,timestamp)', value: crypto.createHmac('sha256', secret).update(ts).digest('hex') });
       signCandidates.push({ label: 'hmac(secret,empty)', value: crypto.createHmac('sha256', secret).update('').digest('hex') });
+      signCandidates.push({ label: 'hmac(secret,apiKey+timestamp)', value: crypto.createHmac('sha256', secret).update(apiKey+ts).digest('hex') });
+      signCandidates.push({ label: 'hmac(secret,timestamp+apiKey)', value: crypto.createHmac('sha256', secret).update(ts+apiKey).digest('hex') });
+      signCandidates.push({ label: 'hmac(secret,apiKey|timestamp)', value: crypto.createHmac('sha256', secret).update(apiKey+':'+ts).digest('hex') });
+      // SHA1 variants
+      signCandidates.push({ label: 'sha1(secret+apiKey)', value: crypto.createHash('sha1').update(secret+apiKey).digest('hex') });
+      signCandidates.push({ label: 'sha1(apiKey+secret)', value: crypto.createHash('sha1').update(apiKey+secret).digest('hex') });
+      // MD5 variants (kadang beberapa provider lama pakai md5)
+      signCandidates.push({ label: 'md5(secret+apiKey)', value: crypto.createHash('md5').update(secret+apiKey).digest('hex') });
+      signCandidates.push({ label: 'md5(apiKey+secret)', value: crypto.createHash('md5').update(apiKey+secret).digest('hex') });
+      signCandidates.push({ label: 'md5(apiKey)', value: crypto.createHash('md5').update(apiKey).digest('hex') });
+      signCandidates.push({ label: 'md5(secret)', value: crypto.createHash('md5').update(secret).digest('hex') });
+      // Uppercase versions (beberapa API minta uppercase)
+      signCandidates.push({ label: 'hmac(secret,apiKey).upper', value: crypto.createHmac('sha256', secret).update(apiKey).digest('hex').toUpperCase() });
+      signCandidates.push({ label: 'md5(secret+apiKey).upper', value: crypto.createHash('md5').update(secret+apiKey).digest('hex').toUpperCase() });
     }
     if (!signCandidates.length) signCandidates.push({ label: 'placeholder', value: 'your-signature-key' });
     attempts = [];
+    const brandPaths = ['/v2/public/brands','/v2/brands','/v1/brands'];
+    // sign parameter names to attempt
+    const signParamNames = ['sign','signature'];
     outerBrands: for (const b of bases) {
-      for (const sc of signCandidates) {
-        const path = `/v2/public/brands?sign=${encodeURIComponent(sc.value)}`;
-        const url = b + path;
-        const started = Date.now();
-        let status = 0; let ok = false; let bodyText=''; let error: string | undefined;
-        try {
-          const res = await fetch(url, { method: 'GET', headers: { Authorization: `Bearer ${apiKey}` }});
-          status = res.status; ok = res.ok; bodyText = await res.text();
-        } catch(e:any){ error = e?.message || String(e); }
-        let brandItems: any[] = [];
-        if (ok) {
-          try {
-            const json = JSON.parse(bodyText||'{}');
-            brandItems = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
-          } catch {}
+      for (const pathBase of brandPaths) {
+        for (const signName of signParamNames) {
+          for (const sc of signCandidates) {
+            const path = `${pathBase}?${signName}=${encodeURIComponent(sc.value)}`;
+            const url = b + path;
+            const started = Date.now();
+            let status = 0; let ok = false; let bodyText=''; let error: string | undefined;
+            try {
+              const res = await fetch(url, { method: 'GET', headers: { Authorization: `Bearer ${apiKey}` }});
+              status = res.status; ok = res.ok; bodyText = await res.text();
+            } catch(e:any){ error = e?.message || String(e); }
+            let brandItems: any[] = [];
+            if (ok) {
+              try {
+                const json = JSON.parse(bodyText||'{}');
+                brandItems = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
+              } catch {}
+            }
+            attempts.push({ url, signLabel: sc.label, signParam: signName, ok, status, items: brandItems.length, ms: Date.now()-started, error, snippet: bodyText.slice(0,240) });
+            if (brandItems.length) {
+              items = brandItems.map(it => ({ code: String(it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.logo || it.icon, category: it.category }));
+              break outerBrands;
+            }
+            if (attempts.length >= 80) break outerBrands;
+          }
         }
-        attempts.push({ url, signLabel: sc.label, ok, status, items: brandItems.length, ms: Date.now()-started, error, snippet: bodyText.slice(0,200) });
-        if (brandItems.length) {
-          items = brandItems.map(it => ({ code: String(it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.logo || it.icon, category: it.category }));
-          break outerBrands;
-        }
-        if (attempts.length >= 40) break outerBrands;
       }
     }
   } else if (verbose) {
