@@ -13,10 +13,11 @@ async function getBrand(code: string) {
   }
 }
 
-// Next.js (App Router) may supply params as a Promise in newer versions
-export default async function BrandDetail({ params }: { params: Promise<{ code: string }> } | { params: { code: string } }) {
-  const p: any = (params as any)?.then ? await (params as Promise<{ code: string }>) : (params as { code: string });
-  const brand = await getBrand(p.code);
+// Page component: accept params (await if it's a Promise for forward-compat)
+export default async function BrandDetail(props: { params: any }) {
+  const raw = props.params;
+  const p = raw && typeof raw.then === 'function' ? await raw : raw;
+  const brand = await getBrand(p?.code);
   if (!brand) return notFound();
   return (
     <div className="max-w-2xl">
