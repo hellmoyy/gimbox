@@ -51,6 +51,15 @@ export default async function ProductEditor({ params }: Params) {
             <input name="code" defaultValue={item ? item.code.replace(/^.*?-/, '') : ''} className="mt-1 w-full border border-slate-300 rounded px-3 py-2 bg-[#fefefe] text-slate-900" placeholder="Jika kosong diambil dari nama" />
             <p className="text-[11px] text-slate-500 mt-1">Akan menjadi brandKey-kode.</p>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-900">Tipe Input Pembelian</label>
+            <select name="purchaseMode" defaultValue={item?.purchaseMode || 'user-id'} className="mt-1 w-full border border-slate-300 rounded px-3 py-2 bg-[#fefefe] text-slate-900">
+              <option value="user-id">User ID saja</option>
+              <option value="user-id-region">User ID + Region/Server</option>
+              <option value="none">Voucher Instant (tanpa input)</option>
+            </select>
+            <p className="text-[11px] text-slate-500 mt-1">Menentukan field yang muncul di form pembelian.</p>
+          </div>
           <div className="flex items-center gap-2 mt-2 md:col-span-3">
             <label className="inline-flex items-center gap-2">
               <input type="checkbox" name="isActive" defaultChecked={(item?.isActive ?? true) !== false} />
@@ -59,6 +68,13 @@ export default async function ProductEditor({ params }: Params) {
           </div>
         </div>
         <VariantsEditor initialVariants={item?.variants || []} fieldName="variants" />
+  <div className="border rounded p-4 bg-white space-y-2">
+    <h3 className="font-semibold text-sm text-slate-900">Purchase Fields (Advanced)</h3>
+    <p className="text-[11px] text-slate-500">JSON array opsional untuk override otomatis. Contoh: [{'{'}"key":"user_id","label":"User ID","required":true,"min":6,"max":16{'}'}] Kosongkan untuk default berdasar purchaseMode.</p>
+    <textarea name="purchaseFields" defaultValue={item?.purchaseFields ? JSON.stringify(item.purchaseFields, null, 2) : ''} className="w-full h-32 font-mono text-xs border border-slate-300 rounded p-2 bg-[#fefefe] text-slate-900" placeholder='[
+  { "key": "user_id", "label": "User ID", "required": true }
+]' />
+  </div>
         <div className="pt-2 flex items-center gap-3">
           <button className="bg-indigo-600 text-white px-5 py-2 rounded">Simpan</button>
         </div>

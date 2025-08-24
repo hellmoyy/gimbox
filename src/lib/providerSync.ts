@@ -1,8 +1,9 @@
 import crypto from "crypto";
 import { getDb } from "./mongodb";
 import { VCGAMERS_API_KEY as CFG_VCG_KEY, VCGAMERS_SECRET_KEY as CFG_VCG_SECRET } from "./runtimeConfig";
-import { getPriceList as fetchVCGPriceList, getBrands as fetchVCGBrands, getBrandProducts as fetchVCGBrandProducts } from "./providers/vcgamers";
+import { getPriceList as fetchVCGPriceList, getBrands as fetchVCGBrands, getBrandProducts as fetchVCGBrandProducts, getVariations as fetchVCGVariations } from "./providers/vcgamers";
 import { resolveBrand } from './brandResolver';
+import { runEnsureIndexesIfNeeded } from './ensureIndexes';
 import { resolveProduct } from './productResolver';
 import { fetchDevPub } from './brandEnrich';
 import { copyImageToCDN, shouldCopyRemote } from './imageStore';
@@ -154,7 +155,9 @@ export async function syncProvider(provider: ProviderName, settingsMain?: any) {
 
 // Full sync for VCGamers: brands -> products; multi-provider ready
 export async function fullSyncVCGamers(options: { deactivateMissing?: boolean; markupPercent?: number } = {}) {
-  const { deactivateMissing = true, markupPercent = Number(process.env.DEFAULT_MARKUP_PERCENT || 0) } = options;
+  // Ensure indexes early (non-blocking if already there)
+  await runEnsureIndexesIfNeeded();
+  const { deactivateMissing = true, markupPercent = Number(process.env.DEFAULT_MARKUP_PERCENT || 1) } = options;
   const startedAt = new Date();
   const db = await getDb();
   const brands = await fetchVCGBrands();
@@ -210,7 +213,26 @@ export async function fullSyncVCGamers(options: { deactivateMissing?: boolean; m
     const canonicalCode = resolved.code;
     const brandDoc = await db.collection('brands').findOne({ code: canonicalCode }, { projection: { defaultMarkupPercent: 1 } });
     const effectiveMarkup = typeof brandDoc?.defaultMarkupPercent === 'number' ? brandDoc.defaultMarkupPercent : markupPercent;
-    const prods = await fetchVCGBrandProducts(b.key).catch(()=>[]) as any[];
+    const prodsBrand = await fetchVCGBrandProducts(b.key).catch(()=>[]) as any[];
+    const prodsVarRaw = await fetchVCGVariations(b.key).catch(()=>[]);
+    // Merge lists (variation meta wins for meta fields; brand list may have image)
+    const mergedMap = new Map<string, any>();
+    for (const p of prodsBrand) {
+      if (!p?.providerProductCode) continue;
+      mergedMap.set(p.providerProductCode, { ...p });
+    }
+    for (const v of prodsVarRaw) {
+      if (!v?.providerProductCode) continue;
+      const existing = mergedMap.get(v.providerProductCode) || {};
+      mergedMap.set(v.providerProductCode, {
+        providerProductCode: v.providerProductCode,
+        name: v.name || existing.name,
+        cost: typeof v.cost === 'number' && v.cost >= 0 ? v.cost : existing.cost,
+        image: existing.image || v.meta?.image,
+        _variationMeta: { sla: v.meta?.sla, isNew: v.meta?.isNew, variationActive: v.meta?.isActive }
+      });
+    }
+    const prods = Array.from(mergedMap.values());
     for (const p of prods) {
       if (!p.providerProductCode) continue;
       let img = p.image || PRODUCT_ICON_PLACEHOLDER;
@@ -227,6 +249,28 @@ export async function fullSyncVCGamers(options: { deactivateMissing?: boolean; m
         if (resolvedProd.price !== targetPrice) {
           await db.collection('products').updateOne({ code: resolvedProd.code }, { $set: { price: targetPrice, updatedAt: new Date() } });
         }
+      }
+      // Persist variation meta (sla, isNew) if present
+      if (p._variationMeta && (p._variationMeta.sla != null || p._variationMeta.isNew != null)) {
+        const metaSet: any = { updatedAt: new Date() };
+        if (p._variationMeta.sla != null) metaSet['meta.sla'] = p._variationMeta.sla;
+        if (p._variationMeta.isNew != null) metaSet['meta.isNew'] = p._variationMeta.isNew;
+        if (p._variationMeta.variationActive != null) metaSet['meta.variationActive'] = p._variationMeta.variationActive;
+        // Store variation key for traceability (idempotent)
+        metaSet['meta.variationKey'] = p.providerProductCode;
+        await db.collection('products').updateOne({ code: resolvedProd.code }, { $set: metaSet });
+      }
+      // Backfill purchaseMode & purchaseFields for older products missing these (heuristic same as resolver)
+      if (resolvedProd.purchaseMode === undefined || resolvedProd.purchaseFields === undefined) {
+        const isVoucher = resolvedProd.brandKey?.includes('voucher');
+        const pm = resolvedProd.brandKey === 'mlbb' ? 'user-id-region' : (isVoucher ? 'none' : 'user-id');
+        const pf = resolvedProd.brandKey === 'mlbb'
+          ? [
+              { key: 'user_id', label: 'User ID', required: true, min: 6, max: 16 },
+              { key: 'zone_id', label: 'Zone ID', required: true, min: 2, max: 8 }
+            ]
+          : (isVoucher ? [] : [ { key: 'user_id', label: 'User ID', required: true, min: 6, max: 16 } ]);
+        await db.collection('products').updateOne({ code: resolvedProd.code }, { $set: { purchaseMode: pm, purchaseFields: pf, updatedAt: new Date() } });
       }
       productsUpserted++;
     }

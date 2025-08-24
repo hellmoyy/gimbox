@@ -274,6 +274,33 @@ export async function getBrandProducts(brandKey: string): Promise<Array<{ provid
   return results;
 }
 
+// Public variations endpoint (alternative denomination listing) – simpler structure.
+// Sample response item fields observed: key, variation_name, brand_name, price, is_active, sla, is_new
+export async function getVariations(brandKey: string): Promise<Array<{ providerProductCode: string; name: string; cost: number; brandKey: string; meta?: any }>> {
+  try {
+    const apiKey = getApiKey();
+    const url = `${baseUrl()}/v2/public/variations?brand_key=${encodeURIComponent(brandKey)}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` }, cache: 'no-store' });
+    if (!res.ok) return [];
+    const json: any = await res.json().catch(()=> ({}));
+    const items = Array.isArray(json?.data) ? json.data : [];
+    return items.map((it:any)=>({
+      providerProductCode: String(it.key || ''),
+      name: String(it.variation_name || it.name || ''),
+      cost: Number(it.price || 0),
+      brandKey,
+      meta: {
+        isActive: it.is_active,
+        sla: it.sla,
+        isNew: it.is_new,
+        raw: undefined,
+      }
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function createOrder(req: VCGOrderRequest): Promise<VCGOrderResponse> {
   const { apiKey } = getKeys();
   const url = baseUrl() + "/v1/orders"; // TODO: confirm path

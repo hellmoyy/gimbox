@@ -38,6 +38,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     update.brandKey = brandKey; update.gameCode = brandKey; update.category = brandKey; update.categories = [brandKey,'semua-produk'];
   }
   if (finalCode) update.code = finalCode;
+  const purchaseMode = String(form.get('purchaseMode') || 'user-id');
+  update.purchaseMode = purchaseMode;
+  const pfRaw = form.get('purchaseFields');
+  if (typeof pfRaw === 'string') {
+    if (pfRaw.trim()) {
+      try { const parsed = JSON.parse(pfRaw); if (Array.isArray(parsed)) update.purchaseFields = parsed; } catch {}
+    } else {
+      update.purchaseFields = [];
+    }
+  }
   update.isActive = form.get("isActive") === "on";
   const variantsRaw = form.get("variants");
   if (typeof variantsRaw === "string") {
@@ -60,6 +70,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   try {
     const db = await getDb();
   try { await db.collection('categories').updateOne({ code: 'semua-produk' }, { $set: { code: 'semua-produk', name: 'Semua Produk', isActive: true } }, { upsert: true }); } catch {}
+    if (update.code) {
+      const duplicate = await db.collection('products').findOne({ code: update.code, _id: { $ne: new ObjectId(id) } });
+      if (duplicate) {
+        return Response.json({ error: 'Kode produk sudah digunakan' }, { status: 400 });
+      }
+    }
     await db.collection("products").updateOne({ _id: new ObjectId(id) }, { $set: update });
   } catch (e: any) {
     const msg = e?.name === "MongoServerSelectionError" ? "Database unavailable" : "Invalid ID";

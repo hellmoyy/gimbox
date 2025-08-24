@@ -64,6 +64,17 @@ export async function resolveProduct(options: {
     icon: image,
     isActive: true,
     providerRefs: { [provider]: [providerProductCode] },
+    // Default purchase configuration heuristic: MLBB needs user+zone, vouchers none, else user only
+    purchaseMode: brandKey === 'mlbb' ? 'user-id-region' : (brandKey.includes('voucher') ? 'none' : 'user-id'),
+    // purchaseFields array drives dynamic form; initial simple heuristic (can be updated later manually)
+    purchaseFields: brandKey === 'mlbb'
+      ? [
+          { key: 'user_id', label: 'User ID', required: true, min: 6, max: 16 },
+          { key: 'zone_id', label: 'Zone ID', required: true, min: 2, max: 8 }
+        ]
+      : (brandKey.includes('voucher')
+          ? []
+          : [ { key: 'user_id', label: 'User ID', required: true, min: 6, max: 16 } ]),
     hash,
     createdAt: new Date(),
     updatedAt: new Date(),

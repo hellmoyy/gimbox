@@ -41,6 +41,9 @@ export async function POST(req: NextRequest, context: { params: { code: string }
   }
   if (markupRaw !== null && markupRaw !== undefined && String(markupRaw).trim() !== '') {
     doc.defaultMarkupPercent = Number(markupRaw);
+  } else if (markupRaw === null || String(markupRaw).trim() === '') {
+    // If user clears input, set to 1% as global default requirement
+    doc.defaultMarkupPercent = 1;
   }
   if (aliasesRaw) {
     const aliases = Array.from(new Set(aliasesRaw.split(/[,\n]/).map(s=>s.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''))).values()).filter(Boolean);

@@ -32,6 +32,20 @@ export default function VariantsEditor({
   function update(idx: number, key: keyof Variant, value: any) {
     setRows((r) => r.map((v, i) => (i === idx ? { ...v, [key]: value } : v)));
   }
+  function updatePrice(idx: number, priceVal: number | null) {
+    setRows(r => r.map((v,i)=>{
+      if (i!==idx) return v;
+      const prevAuto = v.price != null && v.compareAt === Math.round((v.price as number) * 1.1);
+      const next: Variant = { ...v, price: priceVal };
+      if (priceVal != null) {
+        const candidate = Math.round(priceVal * 1.1);
+        if (v.compareAt == null || prevAuto) {
+          next.compareAt = candidate;
+        }
+      }
+      return next;
+    }));
+  }
 
   return (
   <div className="mt-4 w-full">
@@ -71,10 +85,25 @@ export default function VariantsEditor({
                     <input type="number" min={0} value={v.cost ?? ""} onChange={e => update(idx, "cost", e.target.value === "" ? null : Number(e.target.value))} className="w-full border border-slate-300 rounded px-2 py-1 text-slate-900 bg-[#fefefe]" />
                   </td>
                   <td className="p-2">
-                    <input type="number" min={0} value={v.price ?? ""} onChange={e => update(idx, "price", e.target.value === "" ? null : Number(e.target.value))} className="w-full border border-slate-300 rounded px-2 py-1 text-slate-900 bg-[#fefefe]" />
+                    <input
+                      type="number"
+                      min={0}
+                      value={v.price ?? ""}
+                      onChange={e => updatePrice(idx, e.target.value === "" ? null : Number(e.target.value))}
+                      className="w-full border border-slate-300 rounded px-2 py-1 text-slate-900 bg-[#fefefe]"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-500">Harga jual</p>
                   </td>
                   <td className="p-2">
-                    <input type="number" min={0} value={v.compareAt ?? ""} onChange={e => update(idx, "compareAt", e.target.value === "" ? null : Number(e.target.value))} className="w-full border border-slate-300 rounded px-2 py-1 text-slate-900 bg-[#fefefe]" placeholder="Harga sebelum diskon" />
+                    <input
+                      type="number"
+                      min={0}
+                      value={v.compareAt ?? ""}
+                      onChange={e => update(idx, "compareAt", e.target.value === "" ? null : Number(e.target.value))}
+                      className="w-full border border-slate-300 rounded px-2 py-1 text-slate-900 bg-[#fefefe]"
+                      placeholder="Harga sebelum diskon"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-500">Auto = Harga +10%</p>
                   </td>
                   <td className="p-2">
                     <div className="space-y-2">

@@ -24,9 +24,16 @@ export async function POST(req: NextRequest) {
     category: brandKey,
     categories: [brandKey, 'semua-produk'],
     isActive: form.get("isActive") === "on",
+  purchaseMode: String(form.get('purchaseMode') || 'user-id'),
+    // Allow optional JSON purchaseFields override
+    purchaseFields: undefined,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
+  const pfRaw = form.get('purchaseFields');
+  if (typeof pfRaw === 'string' && pfRaw.trim()) {
+    try { const parsed = JSON.parse(pfRaw); if (Array.isArray(parsed)) doc.purchaseFields = parsed; } catch {}
+  }
   const variantsRaw = form.get("variants");
   if (typeof variantsRaw === "string") {
     try {
@@ -47,6 +54,11 @@ export async function POST(req: NextRequest) {
     const db = await getDb();
     // Ensure universal category exists
     try { await db.collection('categories').updateOne({ code: 'semua-produk' }, { $set: { code: 'semua-produk', name: 'Semua Produk', isActive: true } }, { upsert: true }); } catch {}
+    // Duplicate prevention (case-insensitive) by code
+    const existing = await db.collection('products').findOne({ code });
+    if (existing) {
+      return Response.json({ error: 'Kode produk sudah ada' }, { status: 400 });
+    }
     await db.collection("products").insertOne(doc);
   } catch (e: any) {
     const msg = e?.name === "MongoServerSelectionError" ? "Database unavailable" : "DB error";

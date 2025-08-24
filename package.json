@@ -2,6 +2,7 @@
   "name": "topupsaas",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "engines": {
     "node": "20.x",
     "npm": ">=10"

@@ -32,20 +32,22 @@ export async function resolveBrand(options: {
   allowCreate?: boolean;
   defaultMarkupPercent?: number;
 }): Promise<BrandDoc | null> {
-  const { provider, providerBrandCode, providerBrandName, allowCreate = true, defaultMarkupPercent = Number(process.env.DEFAULT_MARKUP_PERCENT || 0) } = options;
+  const { provider, providerBrandCode, providerBrandName, allowCreate = true, defaultMarkupPercent = Number(process.env.DEFAULT_MARKUP_PERCENT || 1) } = options;
   const db = await getDb();
   const raw = providerBrandCode || providerBrandName || '';
   if (!raw) return null;
+  const providerCodeLc = (providerBrandCode || '').toLowerCase();
   const codeGuess = norm(raw);
   // Direct code match
   let doc = await db.collection('brands').findOne({ code: codeGuess }) as BrandDoc | null;
   if (doc) {
-    // ensure providerRefs contains mapping
-    const needsUpdate = !doc.providerRefs?.[provider]?.includes(providerBrandCode);
+    // ensure providerRefs contains mapping (case-insensitive)
+    const existingRefs = (doc.providerRefs?.[provider] || []).map(r=>r.toLowerCase());
+    const needsUpdate = providerCodeLc && !existingRefs.includes(providerCodeLc);
     if (needsUpdate) {
       await db.collection('brands').updateOne(
         { code: doc.code },
-        { $addToSet: { [`providerRefs.${provider}`]: providerBrandCode } }
+        { $addToSet: { [`providerRefs.${provider}`]: providerCodeLc } }
       );
       doc = await db.collection('brands').findOne({ code: codeGuess }) as BrandDoc | null;
     }
@@ -54,18 +56,19 @@ export async function resolveBrand(options: {
   // Alias match
   doc = await db.collection('brands').findOne({ aliases: codeGuess }) as BrandDoc | null;
   if (doc) {
-    const needsUpdate = !doc.providerRefs?.[provider]?.includes(providerBrandCode);
+    const existingRefs = (doc.providerRefs?.[provider] || []).map(r=>r.toLowerCase());
+    const needsUpdate = providerCodeLc && !existingRefs.includes(providerCodeLc);
     if (needsUpdate) {
       await db.collection('brands').updateOne(
         { code: doc.code },
-        { $addToSet: { [`providerRefs.${provider}`]: providerBrandCode } }
+        { $addToSet: { [`providerRefs.${provider}`]: providerCodeLc } }
       );
       doc = await db.collection('brands').findOne({ code: doc.code }) as BrandDoc | null;
     }
     return doc;
   }
-  // providerRefs match
-  doc = await db.collection('brands').findOne({ [`providerRefs.${provider}`]: providerBrandCode }) as BrandDoc | null;
+  // providerRefs match (case-insensitive scan)
+  doc = await db.collection('brands').findOne({ [`providerRefs.${provider}`]: { $elemMatch: { $regex: `^${providerCodeLc}$`, $options: 'i' } } }) as BrandDoc | null;
   if (doc) return doc;
   if (!allowCreate) return null;
   // Create new
@@ -73,7 +76,7 @@ export async function resolveBrand(options: {
     code: codeGuess,
     name: providerBrandName || providerBrandCode,
     aliases: [],
-    providerRefs: { [provider]: [providerBrandCode] },
+    providerRefs: { [provider]: providerCodeLc ? [providerCodeLc] : [] },
     defaultMarkupPercent,
     provider: 'mixed',
     isActive: true,

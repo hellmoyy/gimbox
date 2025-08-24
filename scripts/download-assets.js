@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-const fs = require('fs');
-const path = require('path');
-const axios = require('axios');
+import fs from 'fs';
+import path from 'path';
+import axios from 'axios';
 
 const ROOT = process.cwd();
 const SRC_HOME_DATA = path.join(ROOT, 'src', 'lib', 'homeData.ts');

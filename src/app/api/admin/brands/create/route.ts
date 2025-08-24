@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     code,
     name,
     icon: icon || placeholder,
-    defaultMarkupPercent: defaultMarkupPercent ? Number(defaultMarkupPercent) : undefined,
+    defaultMarkupPercent: defaultMarkupPercent ? Number(defaultMarkupPercent) : 1,
     isActive,
     provider: 'manual',
     aliases: aliases.length ? aliases : undefined,
@@ -72,6 +72,11 @@ export async function POST(req: NextRequest) {
   };
   try {
     const db = await getDb();
+    // Pre-check existing brand with same code (already lowercased) to give friendly error
+    const dup = await db.collection('brands').findOne({ code });
+    if (dup) {
+      return NextResponse.json({ error: 'Code already exists' }, { status: 400 });
+    }
     await db.collection('brands').insertOne(doc);
   } catch (e:any) {
     return NextResponse.json({ error: 'Create failed' }, { status: 500 });
