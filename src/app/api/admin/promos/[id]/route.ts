@@ -10,8 +10,8 @@ function buildRedirectUrl(req: NextRequest, path: string) {
   return new URL(path, req.url).toString();
 }
 
-export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
-  const { id } = ctx.params;
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
   if (!ensureAdminRequest(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const form = await req.formData();
   if (form.get("_method") === "DELETE") {
@@ -44,8 +44,8 @@ export async function POST(req: NextRequest, ctx: { params: { id: string } }) {
   return Response.redirect(buildRedirectUrl(req, '/admin/promos'));
 }
 
-export async function DELETE(req: NextRequest, ctx: { params: { id: string } }) {
-  const { id } = ctx.params;
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
   if (!ensureAdminRequest(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const db = await getDb();
