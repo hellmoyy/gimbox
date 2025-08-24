@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { ensureAdminRequest } from '@/lib/adminAuth';
 import { getPriceList } from '@/lib/providers/vcgamers';
 
 // Lightweight replica of internal probing when verbose diagnostics requested
-async function probeVerbose(limitTotal = 30) {
+async function probeVerbose(limitTotal = 60, extraPaths: string[] = [], extraQuery: string | null = null) {
   const attempts: any[] = [];
   const apiKey = process.env.VCGAMERS_API_KEY || '';
   if (!apiKey) return { attempts: [{ error: 'VCGAMERS_API_KEY missing in env' }], items: [] };
@@ -14,41 +15,52 @@ async function probeVerbose(limitTotal = 30) {
     'https://api.vcgamers.com',
     'https://sandbox-api.vcgamers.com'
   ])).filter(Boolean);
-  const paths = Array.from(new Set([
-    (process.env.VCGAMERS_PRICELIST_PATH || '/v1/pricelist').trim(),
-    '/v1/public/pricelist','/v2/pricelist','/v2/products/pricelist','/v2/product/pricelist','/v1/pricelist'
-  ]));
+  const baseDefaultPath = (process.env.VCGAMERS_PRICELIST_PATH || '/v1/pricelist').trim();
+  // Expanded guess list (common naming variants, singular/plural, hyphen/underscore, versioned + unversioned)
+  const guessPaths = [
+    baseDefaultPath,
+    '/v1/public/pricelist','/v2/pricelist','/v2/products/pricelist','/v2/product/pricelist','/v1/pricelist',
+    '/v1/price-list','/v1/price_list','/v1/pricelists','/v1/product/pricelist','/v1/product/pricelists','/v1/products/pricelist','/v1/products/price',
+    '/pricelist','/price-list','/products/pricelist','/product/pricelist','/api/v1/pricelist','/api/v1/products/pricelist'
+  ];
+  const userExtra = extraPaths.map(p => p.startsWith('/') ? p : '/' + p);
+  const paths = Array.from(new Set([...guessPaths, ...userExtra]));
   const headerVariants = [
     { name: 'Bearer', headers: { 'Content-Type':'application/json', Accept: 'application/json', Authorization: `Bearer ${apiKey}` } },
     { name: 'X-Api-Key', headers: { 'Content-Type':'application/json', Accept: 'application/json', 'X-Api-Key': apiKey } },
   ];
+  const methods = ['GET','POST'];
   let found: any[] = [];
   outer: for (const b of bases) {
     for (const p of paths) {
       for (const hv of headerVariants) {
-        const url = b + p;
-        const started = Date.now();
-        let status = 0; let ok = false; let bodyText = ''; let error: string | undefined;
-        try {
-          const res = await fetch(url, { method: 'GET', headers: hv.headers as any, cache: 'no-store' });
-          status = res.status; ok = res.ok;
-          bodyText = await res.text();
-        } catch (e: any) {
-          error = e?.message || String(e);
-        }
-        let items: any[] = [];
-        if (ok) {
+        for (const method of methods) {
+          const qp = extraQuery ? (p.includes('?') ? '&' + extraQuery : p + '?' + extraQuery) : p;
+          const url = b + qp;
+          const started = Date.now();
+          let status = 0; let ok = false; let bodyText = ''; let error: string | undefined;
           try {
-            const json = JSON.parse(bodyText || '{}');
-            items = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
-          } catch {}
+            const res = await fetch(url, { method, headers: hv.headers as any, cache: 'no-store', body: method === 'POST' ? JSON.stringify({}) : undefined });
+            status = res.status; ok = res.ok;
+            bodyText = await res.text();
+          } catch (e: any) {
+            error = e?.message || String(e);
+          }
+          let items: any[] = [];
+          if (ok) {
+            try {
+              const json = JSON.parse(bodyText || '{}');
+              items = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
+            } catch {}
+          }
+          const notFoundLike = /Cannot GET|Not Found|Route not found/i.test(bodyText) || status === 404;
+          attempts.push({ url, method, header: hv.name, ok, status, notFoundLike, items: items.length, ms: Date.now() - started, error, snippet: bodyText.slice(0, 220) });
+          if (items.length) {
+            found = items;
+            break outer;
+          }
+          if (attempts.length >= limitTotal) break outer;
         }
-        attempts.push({ url, header: hv.name, ok, status, items: items.length, ms: Date.now() - started, error, snippet: bodyText.slice(0, 140) });
-        if (items.length) {
-          found = items;
-          break outer; // stop at first success to keep response small
-        }
-        if (attempts.length >= limitTotal) break outer;
       }
     }
   }
@@ -68,11 +80,61 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(50, Math.max(1, Number(searchParams.get('limit')) || 10));
   const raw = searchParams.get('raw') === 'true';
   const verbose = searchParams.get('verbose') === 'true' || searchParams.get('debug') === '1';
+  const extraPathsParam = searchParams.get('paths');
+  const extraPaths = extraPathsParam ? extraPathsParam.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  const qParam = searchParams.get('q'); // e.g. q=limit=500
+  const mode = (searchParams.get('mode') || '').toLowerCase(); // mode=brands
   const started = Date.now();
   let items: any[] = [];
   let attempts: any[] | undefined;
-  if (verbose) {
-    const diag = await probeVerbose(40);
+  if (verbose && mode === 'brands') {
+    // Probe brand listing endpoint: /v2/public/brands?sign=...
+    const apiKey = process.env.VCGAMERS_API_KEY || '';
+    const secret = process.env.VCGAMERS_SECRET_KEY || '';
+    const bases = [
+      (process.env.VCGAMERS_BASE_URL || '').replace(/\/$/, '') || 'https://mitra-api.vcgamers.com',
+      'https://mitra-api.vcgamers.com',
+      'https://sandbox-api.vcgamers.com'
+    ];
+    const signCandidates: Array<{label:string;value:string}> = [];
+    if (secret) signCandidates.push({ label: 'secret', value: secret });
+    if (apiKey) signCandidates.push({ label: 'apiKey', value: apiKey });
+    if (apiKey && secret) {
+      signCandidates.push({ label: 'hmac(secret,apiKey)', value: crypto.createHmac('sha256', secret).update(apiKey).digest('hex') });
+      signCandidates.push({ label: 'hmac(apiKey,secret)', value: crypto.createHmac('sha256', apiKey).update(secret).digest('hex') });
+      const ts = Math.floor(Date.now()/1000).toString();
+      signCandidates.push({ label: 'hmac(secret,timestamp)', value: crypto.createHmac('sha256', secret).update(ts).digest('hex') });
+      signCandidates.push({ label: 'hmac(secret,empty)', value: crypto.createHmac('sha256', secret).update('').digest('hex') });
+    }
+    if (!signCandidates.length) signCandidates.push({ label: 'placeholder', value: 'your-signature-key' });
+    attempts = [];
+    outerBrands: for (const b of bases) {
+      for (const sc of signCandidates) {
+        const path = `/v2/public/brands?sign=${encodeURIComponent(sc.value)}`;
+        const url = b + path;
+        const started = Date.now();
+        let status = 0; let ok = false; let bodyText=''; let error: string | undefined;
+        try {
+          const res = await fetch(url, { method: 'GET', headers: { Authorization: `Bearer ${apiKey}` }});
+          status = res.status; ok = res.ok; bodyText = await res.text();
+        } catch(e:any){ error = e?.message || String(e); }
+        let brandItems: any[] = [];
+        if (ok) {
+          try {
+            const json = JSON.parse(bodyText||'{}');
+            brandItems = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
+          } catch {}
+        }
+        attempts.push({ url, signLabel: sc.label, ok, status, items: brandItems.length, ms: Date.now()-started, error, snippet: bodyText.slice(0,200) });
+        if (brandItems.length) {
+          items = brandItems.map(it => ({ code: String(it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.logo || it.icon, category: it.category }));
+          break outerBrands;
+        }
+        if (attempts.length >= 40) break outerBrands;
+      }
+    }
+  } else if (verbose) {
+    const diag = await probeVerbose(80, extraPaths, qParam);
     attempts = diag.attempts;
     items = diag.items.map(it => ({
       code: String(it.code || it.sku || it.product_code || ''),
@@ -109,6 +171,10 @@ export async function GET(req: NextRequest) {
       baseOverride: process.env.VCGAMERS_BASE_URL || null,
       pathOverride: process.env.VCGAMERS_PRICELIST_PATH || null,
       hasApiKey: !!process.env.VCGAMERS_API_KEY,
+      extraPaths,
+      extraQuery: qParam || null,
+      mode: mode || 'pricelist',
+      hasSecret: !!process.env.VCGAMERS_SECRET_KEY,
     } : undefined,
   });
 }
