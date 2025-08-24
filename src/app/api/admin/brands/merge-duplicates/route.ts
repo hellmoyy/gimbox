@@ -68,9 +68,11 @@ export async function POST(req: NextRequest) {
       let productsChanged = 0;
       while (await prodCursor.hasNext()) {
         const p = await prodCursor.next();
-        const oldBrandKey = p.brandKey;
+        if (!p) continue; // safety
+        const oldBrandKey: string | undefined = p.brandKey;
+        if (!oldBrandKey) continue;
         if (oldBrandKey === canonical.code) continue;
-        if (!p.code.startsWith(oldBrandKey+'-')) continue;
+        if (typeof p.code !== 'string' || !p.code.startsWith(oldBrandKey+'-')) continue;
         const suffix = p.code.slice(oldBrandKey.length+1);
         const newCode = `${canonical.code}-${suffix}`.toLowerCase();
         const exists = await db.collection('products').findOne({ code: newCode });
