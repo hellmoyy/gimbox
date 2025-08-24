@@ -22,12 +22,36 @@ Environment:
 
 import fs from 'fs';
 import path from 'path';
-import { getDb } from '../src/lib/mongodb.js';
-import { fetchDevPub } from '../src/lib/brandEnrich.js';
+import { getDb } from './lib/mongodb.js';
+import { fetchDevPub } from './lib/brandEnrich.js';
+
+function loadDotEnv() {
+  if (process.env.MONGODB_URI) return; // already set
+  const candidates = ['.env.local', '.env'];
+  for (const file of candidates) {
+    const p = path.resolve(process.cwd(), file);
+    if (!fs.existsSync(p)) continue;
+    try {
+      const content = fs.readFileSync(p, 'utf-8');
+      for (const line of content.split(/\r?\n/)) {
+        if (!line || line.trim().startsWith('#')) continue;
+        const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+        if (!m) continue;
+        const key = m[1];
+        let val = m[2];
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (process.env[key] === undefined) process.env[key] = val;
+      }
+    } catch {}
+    if (process.env.MONGODB_URI) break;
+  }
+}
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const opts = { dry:false, limit:0, file:null, clearMissing:false, forceEnrich:false };
+  const opts = { dry:false, limit:0, file:null, clearMissing:false, forceEnrich:false, uri:null };
   for (let i=0;i<args.length;i++) {
     const a = args[i];
     if (a === '--dry') opts.dry = true;
@@ -35,6 +59,7 @@ function parseArgs() {
     else if (a === '--file') { opts.file = args[++i] || null; }
     else if (a === '--clear-missing') opts.clearMissing = true;
     else if (a === '--force-enrich') opts.forceEnrich = true;
+    else if (a === '--uri') { opts.uri = args[++i] || null; }
   }
   return opts;
 }
@@ -47,7 +72,13 @@ function logLine(type, msg, extra={}) {
 }
 
 async function main() {
+  loadDotEnv();
   const opts = parseArgs();
+  if (opts.uri && !process.env.MONGODB_URI) process.env.MONGODB_URI = opts.uri;
+  if (!process.env.MONGODB_URI) {
+    console.error('MONGODB_URI not set. Provide via env, .env(.local), or --uri <connectionString>');
+    process.exit(1);
+  }
   const db = await getDb();
   const brandsCol = db.collection('brands');
   const mapping = opts.file ? JSON.parse(fs.readFileSync(path.resolve(opts.file),'utf-8')) : null;
