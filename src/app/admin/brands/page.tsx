@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import FullSyncButton from '@/components/admin/FullSyncButton';
 import MergeDuplicatesButton from '@/components/admin/MergeDuplicatesButton';
 import DeleteInactiveBrandsButton from '@/components/admin/DeleteInactiveBrandsButton';
+import BrandsActionsDropdown from '../../../components/admin/BrandsActionsDropdown';
 
 export const dynamic = 'force-dynamic';
 
@@ -113,10 +114,7 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
             {(q || cat) && <Link href="/admin/brands" className="text-xs text-slate-500 ml-1">Reset</Link>}
           </form>
           <Link href="/admin/brands/new" className="bg-green-600 text-white px-3 py-2 rounded">Tambah Brand</Link>
-          <Link href="/admin/products/sync" className="bg-indigo-600 text-white px-3 py-2 rounded">Sync Harga VCG</Link>
-          <FullSyncButton />
-          <MergeDuplicatesButton />
-          <DeleteInactiveBrandsButton />
+          <BrandsActionsDropdown />
         </div>
       </div>
       <div className="mb-3 text-xs text-slate-600 flex flex-wrap items-center gap-3">
