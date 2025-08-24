@@ -35,5 +35,24 @@ export async function getDb(dbName = "topupsaas"): Promise<Db> {
     global._mongoClientPromise = client.connect();
   }
   const client = await global._mongoClientPromise;
-  return client.db(dbName);
+  const db = client.db(dbName);
+  // Ensure core indexes once per runtime
+  if (!(global as any)._gimboxIndexesEnsured) {
+    (global as any)._gimboxIndexesEnsured = true;
+    // Fire and forget; log only on error
+    (async () => {
+      try {
+        await Promise.all([
+          db.collection('brands').createIndex({ code: 1 }, { unique: true, name: 'uniq_brand_code' }).catch(()=>{}),
+          db.collection('brands').createIndex({ aliases: 1 }, { name: 'idx_brand_alias' }).catch(()=>{}),
+          db.collection('products').createIndex({ code: 1 }, { unique: true, name: 'uniq_product_code' }).catch(()=>{}),
+          db.collection('products').createIndex({ brandKey: 1 }, { name: 'idx_product_brandKey' }).catch(()=>{}),
+          db.collection('products').createIndex({ 'providerRefs.vcgamers': 1 }, { name: 'idx_product_providerRefs_vcgamers' }).catch(()=>{}),
+        ]);
+      } catch (e:any) {
+        console.warn('[mongodb] ensureIndexes error', e?.message || e);
+      }
+    })();
+  }
+  return db;
 }

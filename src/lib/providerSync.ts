@@ -1,7 +1,11 @@
 import crypto from "crypto";
 import { getDb } from "./mongodb";
 import { VCGAMERS_API_KEY as CFG_VCG_KEY, VCGAMERS_SECRET_KEY as CFG_VCG_SECRET } from "./runtimeConfig";
-import { getPriceList as fetchVCGPriceList } from "./providers/vcgamers";
+import { getPriceList as fetchVCGPriceList, getBrands as fetchVCGBrands, getBrandProducts as fetchVCGBrandProducts } from "./providers/vcgamers";
+import { resolveBrand } from './brandResolver';
+import { resolveProduct } from './productResolver';
+import { fetchDevPub } from './brandEnrich';
+import { copyImageToCDN, shouldCopyRemote } from './imageStore';
 
 // Normalize a provider price list item shape
 export type ProviderItem = { code: string; name: string; cost: number; icon?: string; category?: string };
@@ -39,6 +43,7 @@ export async function upsertProductsFromList(list: ProviderItem[]) {
       let code = (catRaw || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
       if (!code) code = "game";
       update.category = code;
+      update.categories = [code, 'semua-produk'];
       try {
         await db.collection("categories").updateOne(
           { code },
@@ -47,9 +52,11 @@ export async function upsertProductsFromList(list: ProviderItem[]) {
         );
       } catch {}
     }
+    // Ensure universal category exists and product has it
+    try { await db.collection('categories').updateOne({ code: 'semua-produk' }, { $set: { code: 'semua-produk', name: 'Semua Produk', isActive: true } }, { upsert: true }); } catch {}
     await db.collection("products").updateOne(
       { code: item.code },
-      { $set: update, $setOnInsert: { price: (item as any).cost, isActive: true } },
+      { $set: update, $addToSet: { categories: 'semua-produk' }, $setOnInsert: { price: (item as any).cost, isActive: true, categories: update.categories || ['semua-produk'] } },
       { upsert: true }
     );
     upserted++;
@@ -104,6 +111,7 @@ export async function importProductsAddOnly(list: ProviderItem[]) {
       price: (it as any).cost ?? 0,
       icon: (rawIcon && String(rawIcon).trim() !== '') ? rawIcon : PRODUCT_ICON_PLACEHOLDER,
       category: category,
+  categories: [category, 'semua-produk'].filter(Boolean),
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -142,6 +150,110 @@ export async function syncProvider(provider: ProviderName, settingsMain?: any) {
   }
   const res = await upsertProductsFromList(list);
   return { provider, count: res.upserted };
+}
+
+// Full sync for VCGamers: brands -> products; multi-provider ready
+export async function fullSyncVCGamers(options: { deactivateMissing?: boolean; markupPercent?: number } = {}) {
+  const { deactivateMissing = true, markupPercent = Number(process.env.DEFAULT_MARKUP_PERCENT || 0) } = options;
+  const startedAt = new Date();
+  const db = await getDb();
+  const brands = await fetchVCGBrands();
+  const brandUpserts: number[] = [];
+  // Upsert brands into games (legacy) and brands (new) collections with provider tag & allow markup
+  // Resolve & upsert canonical brand docs, mapping providerRefs
+  for (const b of brands) {
+    if (!b.key) continue;
+    try {
+      const resolved = await resolveBrand({ provider: 'vcgamers', providerBrandCode: b.key, providerBrandName: b.name, defaultMarkupPercent: markupPercent });
+      if (resolved) {
+        // Update basic display fields if changed (name/icon)
+        const setDoc: any = { updatedAt: new Date(), isActive: true };
+        if (b.name && b.name !== resolved.name) setDoc.name = b.name;
+        if (b.image) {
+          let iconUrl = b.image;
+          if (shouldCopyRemote(iconUrl)) {
+            const copied = await copyImageToCDN(iconUrl, { folder: 'brands', slug: resolved.code });
+            if (copied) iconUrl = copied;
+          }
+          setDoc.icon = iconUrl;
+        } else if (!resolved.icon) {
+          setDoc.icon = process.env.PRODUCT_PLACEHOLDER_URL || 'https://cdn.gimbox.id/placeholder.webp';
+        }
+        await db.collection('brands').updateOne({ code: resolved.code }, { $set: setDoc });
+        await db.collection('games').updateOne(
+          { code: resolved.code },
+          { $set: { code: resolved.code, name: setDoc.name || resolved.name, icon: b.image || resolved.icon, provider: 'vcgamers', isActive: true, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
+          { upsert: true }
+        );
+          // attempt lightweight enrichment if missing dev/pub using configured ENRICH_SOURCES
+          if (!resolved.developer || !resolved.publisher) {
+            try {
+              const ext = await fetchDevPub(b.name || resolved.name);
+              if (ext && (ext.developer || ext.publisher)) {
+                if (ext.developer && !resolved.developer) setDoc.developer = ext.developer;
+                if (ext.publisher && !resolved.publisher) setDoc.publisher = ext.publisher;
+              }
+            } catch {}
+          }
+        brandUpserts.push(1);
+      }
+    } catch {}
+  }
+  // Fetch products per brand (sequential with small concurrency to reduce pressure)
+  const allCodes: Set<string> = new Set();
+  let productsUpserted = 0;
+  for (const b of brands) {
+    if (!b.key) continue;
+    // Resolve canonical brand again (should exist now)
+    const resolved = await resolveBrand({ provider: 'vcgamers', providerBrandCode: b.key, providerBrandName: b.name, allowCreate: true, defaultMarkupPercent: markupPercent });
+    if (!resolved) continue;
+    const canonicalCode = resolved.code;
+    const brandDoc = await db.collection('brands').findOne({ code: canonicalCode }, { projection: { defaultMarkupPercent: 1 } });
+    const effectiveMarkup = typeof brandDoc?.defaultMarkupPercent === 'number' ? brandDoc.defaultMarkupPercent : markupPercent;
+    const prods = await fetchVCGBrandProducts(b.key).catch(()=>[]) as any[];
+    for (const p of prods) {
+      if (!p.providerProductCode) continue;
+      let img = p.image || PRODUCT_ICON_PLACEHOLDER;
+      if (shouldCopyRemote(img)) {
+        const copied = await copyImageToCDN(img, { folder: 'products', slug: p.providerProductCode });
+        if (copied) img = copied;
+      }
+      const resolvedProd = await resolveProduct({ provider: 'vcgamers', providerProductCode: p.providerProductCode, name: p.name, cost: p.cost, brandKey: canonicalCode, image: img, allowCreate: true });
+      if (!resolvedProd) continue;
+      allCodes.add(resolvedProd.code);
+      // Apply markup if no customPrice & price equals cost
+      if (!resolvedProd.customPrice) {
+        const targetPrice = effectiveMarkup > 0 ? Math.round(p.cost * (1 + effectiveMarkup/100)) : p.cost;
+        if (resolvedProd.price !== targetPrice) {
+          await db.collection('products').updateOne({ code: resolvedProd.code }, { $set: { price: targetPrice, updatedAt: new Date() } });
+        }
+      }
+      productsUpserted++;
+    }
+  }
+  let deactivated = 0;
+  if (deactivateMissing) {
+    const res = await db.collection('products').updateMany(
+      { provider: 'vcgamers', code: { $nin: Array.from(allCodes) } },
+      { $set: { isActive: false, updatedAt: new Date() } }
+    );
+    deactivated = res.modifiedCount || 0;
+  }
+  const finishedAt = new Date();
+  const logDoc = {
+    provider: 'vcgamers',
+    type: 'full-sync',
+    startedAt,
+    finishedAt,
+    durationMs: finishedAt.getTime() - startedAt.getTime(),
+    brandsCount: brands.length,
+    productsUpserted,
+    productsActive: allCodes.size,
+    productsDeactivated: deactivated,
+  markupPercent,
+  };
+  try { await db.collection('provider_sync_logs').insertOne(logDoc); } catch {}
+  return logDoc;
 }
 
 // Import-only version: add new items only, do not modify existing ones

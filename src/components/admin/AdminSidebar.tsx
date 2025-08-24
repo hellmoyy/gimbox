@@ -91,6 +91,7 @@ type NavItem = { href: string; label: string; icon: React.ReactNode; children?: 
 
 const nav: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: icons.home },
+  { href: "/admin/brands", label: "Brands", icon: icons.grid },
   { href: "/admin/products", label: "Produk", icon: icons.box },
   { href: "/admin/banners", label: "Banner", icon: icons.image },
   { href: "/admin/promos", label: "Promo", icon: icons.tag },

@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
     code: String(form.get("code") || ""),
     icon: String(form.get("icon") || ""),
     category: String(form.get("category") || "game"),
+  categories: [String(form.get("category") || "game"), 'semua-produk'],
     featured: form.get("featured") === "on",
   newRelease: form.get("newRelease") === "on",
   voucher: form.get("voucher") === "on",
@@ -45,7 +46,10 @@ export async function POST(req: NextRequest) {
         { upsert: true }
       );
       doc.category = code;
+      doc.categories = [code, 'semua-produk'];
     }
+    // Ensure universal category exists
+    try { await db.collection('categories').updateOne({ code: 'semua-produk' }, { $set: { code: 'semua-produk', name: 'Semua Produk', isActive: true } }, { upsert: true }); } catch {}
     await db.collection("products").insertOne(doc);
   } catch (e: any) {
     const msg = e?.name === "MongoServerSelectionError" ? "Database unavailable" : "DB error";

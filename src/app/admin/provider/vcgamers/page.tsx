@@ -16,6 +16,55 @@ export default function AdminVCGamersPage() {
   const [orderResult, setOrderResult] = useState<any>(null);
   const [statusOrderId, setStatusOrderId] = useState("");
   const [statusResult, setStatusResult] = useState<any>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncEvents, setSyncEvents] = useState<any[]>([]);
+  const [progress, setProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
+  const [controller, setController] = useState<AbortController | null>(null);
+  const [brandProgress, setBrandProgress] = useState<Record<string,{processed:number;total:number;pct:number}>>({});
+
+  async function startStreamingSync() {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncEvents([]);
+    setProgress({ current: 0, total: 0 });
+    setBrandProgress({});
+    try {
+      const ctrl = new AbortController();
+      setController(ctrl);
+      const res = await fetch(`/api/admin/providers/vcgamers/sync-stream`, { method: 'GET', cache: 'no-store', signal: ctrl.signal });
+      if (!res.body) throw new Error('Stream tidak tersedia');
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n').filter(l => l.trim() !== '');
+        for (const line of lines) {
+          try {
+            const evt = JSON.parse(line);
+            setSyncEvents(prev => [...prev.slice(-199), evt]);
+            if (evt.type === 'brands') setProgress(p => ({ ...p, total: evt.count }));
+            if (evt.type === 'brand:start') setProgress(p => ({ ...p, current: evt.index }));
+            if (evt.type === 'brand:progress') {
+              setBrandProgress(prev => ({ ...prev, [evt.canonical || evt.key]: { processed: evt.processed, total: evt.totalProducts, pct: evt.pct }}));
+            }
+          } catch {}
+        }
+      }
+    } catch (e:any) {
+      setSyncEvents(prev => [...prev, { type: 'error', message: e.message }]);
+    } finally {
+      setSyncing(false);
+      setController(null);
+    }
+  }
+
+  function cancelSync() {
+    if (controller) {
+      controller.abort();
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -144,9 +193,44 @@ export default function AdminVCGamersPage() {
           <div className="flex items-center gap-2">
             <button onClick={loadPriceList} className="px-3 py-2 rounded bg-slate-800 text-white text-sm disabled:opacity-60" disabled={loadingList}>{loadingList ? "Memuat…" : "Muat Price List"}</button>
             <button onClick={syncToProducts} className="px-3 py-2 rounded bg-indigo-600 text-white text-sm">Sync ke Produk</button>
+            <div className="flex items-center gap-2">
+              <button onClick={startStreamingSync} disabled={syncing} className="px-3 py-2 rounded bg-orange-600 text-white text-sm disabled:opacity-60 flex items-center gap-2">
+                {syncing && <span className="h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                {syncing ? 'Full Sync (jalan)…' : 'Full Sync Live'}
+              </button>
+              {syncing && (
+                <button onClick={cancelSync} className="px-3 py-2 rounded bg-red-600 text-white text-sm">Cancel</button>
+              )}
+            </div>
             <button onClick={exportCsv} className="px-3 py-2 rounded bg-slate-700 text-white text-sm" disabled={filtered.length === 0}>Export CSV</button>
           </div>
         </div>
+        { (syncing || syncEvents.length>0) && (
+          <div className="mt-3 rounded border bg-slate-50 p-3 text-xs max-h-56 overflow-auto">
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold">Progress Sync</div>
+              <div>{progress.total>0 ? `${progress.current}/${progress.total} brand` : ''}</div>
+            </div>
+            {progress.total>0 && (
+              <div className="w-full h-2 bg-slate-200 rounded mb-2 overflow-hidden">
+                <div className="h-full bg-orange-500 transition-all" style={{ width: progress.total>0? `${(progress.current/progress.total)*100}%`: '0%' }} />
+              </div>
+            )}
+            <ul className="space-y-1">
+              {syncEvents.slice(-50).map((e,i) => (
+                <li key={i} className="whitespace-pre-wrap">
+                  {e.type === 'brand:start' && `▶ ${e.index}. ${e.key}${e.canonical && e.canonical!==e.key ? ' → '+e.canonical:''}`}
+                  {e.type === 'brand:progress' && `… ${e.key} ${e.processed}/${e.totalProducts} (${e.pct}%)`}
+                  {e.type === 'brand:done' && `✓ ${e.key}${e.canonical && e.canonical!==e.key ? ' → '+e.canonical:''} (${e.products} produk)`}
+                  {e.type === 'brands' && `Total brand: ${e.count}`}
+                  {e.type === 'done' && `Selesai: ${e.upserted} upserted, aktif ${e.active}, dinonaktifkan ${e.deactivated}`}
+                  {e.type === 'error' && `ERROR: ${e.message}`}
+                  {e.type === 'start' && 'Mulai sync…'}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="mt-3 flex items-center justify-between gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari code / nama…" className="w-64 max-w-full border border-slate-300 rounded px-3 py-2 text-sm" />
           <div className="text-xs text-slate-500">Menampilkan {filtered.length} dari {items.length} item</div>

@@ -13,7 +13,9 @@
     "lint": "next lint",
     "images:convert": "node scripts/convert-webp-to-jpg.js",
     "images:download": "node scripts/download-assets.js",
-    "vcg:test": "node scripts/test-vcgamers.mjs"
+    "vcg:test": "node scripts/test-vcgamers.mjs",
+    "brands:enrich": "node scripts/enrich-brands.mjs",
+    "brands:auto-enrich": "node scripts/auto-enrich-brands.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.873.0",

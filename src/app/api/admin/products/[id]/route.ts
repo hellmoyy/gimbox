@@ -33,6 +33,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     code: String(form.get("code") || ""),
     icon: String(form.get("icon") || ""),
     category: String(form.get("category") || "game"),
+  categories: [String(form.get("category") || "game"), 'semua-produk'],
     featured: form.get("featured") === "on",
   newRelease: form.get("newRelease") === "on",
   voucher: form.get("voucher") === "on",
@@ -70,7 +71,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         { upsert: true }
       );
       update.category = code;
+      update.categories = [code, 'semua-produk'];
     }
+    try { await db.collection('categories').updateOne({ code: 'semua-produk' }, { $set: { code: 'semua-produk', name: 'Semua Produk', isActive: true } }, { upsert: true }); } catch {}
     await db.collection("products").updateOne({ _id: new ObjectId(id) }, { $set: update });
   } catch (e: any) {
     const msg = e?.name === "MongoServerSelectionError" ? "Database unavailable" : "Invalid ID";

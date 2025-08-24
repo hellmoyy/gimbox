@@ -134,30 +134,144 @@ export async function getPriceList(): Promise<Array<{ code: string; name: string
 
 // Discovered brand listing signature: sign = Base64( hex( HMAC_SHA512(secret + 'brand', secret) ) )
 export async function getBrands(): Promise<Array<{ key: string; name: string; image?: string }>> {
+  const debug = process.env.DEBUG_VCGAMERS === '1';
   try {
     const apiKey = getApiKey();
     const secret = getSecret();
-    const base = baseUrl();
-    const baseString = secret + 'brand';
-    const hmacHex = crypto.createHmac('sha512', secret).update(baseString).digest('hex');
-    const signature = Buffer.from(hmacHex).toString('base64');
-    const url = `${base}/v2/public/brands?sign=${encodeURIComponent(signature)}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` }, cache: 'no-store' }).catch((e:any)=>{
-      console.warn('[vcgamers] getBrands fetch error', e?.message||e); return undefined as any; });
-    if (!res) return [];
-    const text = await res.text();
-    if (!res.ok) {
-      console.warn('[vcgamers] getBrands HTTP', res.status, text.slice(0,120));
-      return [];
+    const bases = candidateBaseUrls();
+    const baseStringVariants = [secret + 'brand', secret + 'brands'];
+    const results: any[] = [];
+    const attempts: Array<{ base: string; ok: boolean; status?: number; variant: string; count?: number }> = [];
+    for (const b of bases) {
+      for (const bs of baseStringVariants) {
+        const hmacHex = crypto.createHmac('sha512', secret).update(bs).digest('hex');
+        const signatures = [
+          Buffer.from(hmacHex).toString('base64'), // b64(hex)
+          hmacHex,                                 // hex
+        ];
+        for (const sig of signatures) {
+          const url = `${b}/v2/public/brands?sign=${encodeURIComponent(sig)}`;
+          let res: Response | undefined;
+            try { res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` }, cache: 'no-store' }); } catch (e:any) {
+              attempts.push({ base: b, ok: false, variant: bs, status: -1 });
+              continue;
+            }
+          if (!res) continue;
+          const text = await res.text();
+          if (!res.ok) {
+            attempts.push({ base: b, ok: false, variant: bs, status: res.status });
+            continue;
+          }
+          let json: any = {};
+          try { json = JSON.parse(text||'{}'); } catch {}
+          const items = Array.isArray(json?.data)? json.data : (Array.isArray(json)? json : []);
+          if (items.length) {
+            attempts.push({ base: b, ok: true, variant: bs, status: res.status, count: items.length });
+            results.push(...items);
+            // stop after first success
+            const mapped = results.filter(Boolean).map((it:any)=>({ key: String(it.key||''), name: String(it.name||''), image: it.image_url || it.logo || it.icon }));
+            if (debug) console.log('[vcgamers] getBrands success', attempts[attempts.length-1]);
+            return mapped;
+          } else {
+            attempts.push({ base: b, ok: false, variant: bs, status: res.status, count: 0 });
+          }
+        }
+      }
     }
-    let json: any = {};
-    try { json = JSON.parse(text||'{}'); } catch {}
-    const items = Array.isArray(json?.data)? json.data : (Array.isArray(json)? json : []);
-    return items.filter(Boolean).map((it:any)=>({ key: String(it.key||''), name: String(it.name||''), image: it.image_url || it.logo || it.icon }));
+    if (debug) console.warn('[vcgamers] getBrands no data attempts sample', attempts.slice(0,5));
+    return [];
   } catch (e:any) {
     console.warn('[vcgamers] getBrands error', e?.message||e);
     return [];
   }
+}
+
+// Attempt to fetch products for a specific brand (experimental – signature variants)
+export async function getBrandProducts(brandKey: string): Promise<Array<{ providerProductCode: string; name: string; cost: number; image?: string; brandKey: string }>> {
+  const apiKey = getApiKey();
+  const secret = getSecret();
+  const base = baseUrl();
+  const debug = process.env.DEBUG_VCGAMERS === '1';
+  const results: Array<{ providerProductCode: string; name: string; cost: number; image?: string; brandKey: string }> = [];
+  const attempts: Array<{ url: string; ok: boolean; status?: number; variant: string; count?: number; sigKind?: string }> = [];
+
+  // More exhaustive signature hypotheses
+  const baseStringVariants = [
+    secret + 'product',
+    secret + brandKey + 'product',
+    secret + 'products',
+    secret + brandKey + 'products',
+    secret + 'pricelist',
+    secret + brandKey + 'pricelist',
+    secret + 'brand' + brandKey,
+    secret + brandKey,
+  ];
+  // Deduplicate
+  const baseStrings = Array.from(new Set(baseStringVariants));
+
+  const endpointBuilders = [
+    (sig: string) => `${base}/v2/public/products?brand_key=${encodeURIComponent(brandKey)}&sign=${encodeURIComponent(sig)}`,
+    (sig: string) => `${base}/v2/public/brands/${encodeURIComponent(brandKey)}/products?sign=${encodeURIComponent(sig)}`,
+    (sig: string) => `${base}/v2/public/pricelist?brand_key=${encodeURIComponent(brandKey)}&sign=${encodeURIComponent(sig)}`,
+  ];
+
+  // Different digest encodings
+  function buildSignatures(bs: string) {
+    const hRaw = crypto.createHmac('sha512', secret).update(bs).digest();
+    const hex = hRaw.toString('hex');
+    return [
+      { sig: Buffer.from(hex).toString('base64'), kind: 'b64(hex(sha512))' },
+      { sig: hex, kind: 'hex(sha512)' },
+      { sig: hRaw.toString('base64'), kind: 'b64(raw(sha512))' },
+      { sig: hex.toUpperCase(), kind: 'HEX(sha512)' },
+    ];
+  }
+
+  outer: for (const bs of baseStrings) {
+    const sigs = buildSignatures(bs);
+    for (const s of sigs) {
+      for (const ep of endpointBuilders) {
+        const url = ep(s.sig);
+        let res: Response | undefined;
+        try {
+          res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` }, cache: 'no-store' });
+        } catch (e:any) {
+          attempts.push({ url, ok: false, status: -1, variant: bs, sigKind: s.kind });
+          continue;
+        }
+        if (!res) continue;
+        const text = await res.text();
+        if (!res.ok) {
+          attempts.push({ url, ok: false, status: res.status, variant: bs, sigKind: s.kind });
+          continue;
+        }
+        let json: any = {};
+        try { json = JSON.parse(text||'{}'); } catch {}
+        const items = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
+        if (items.length) {
+          for (const it of items) {
+            results.push({
+              providerProductCode: String(it.code || it.sku || it.product_code || it.id || ''),
+              name: String(it.name || it.product_name || it.title || ''),
+              cost: Number(it.price || it.cost || it.amount || 0),
+              image: it.image_url || it.image || it.icon,
+              brandKey,
+            });
+          }
+          attempts.push({ url, ok: true, status: res.status, variant: bs, count: items.length, sigKind: s.kind });
+          if (debug) console.log('[vcgamers] brand products success', brandKey, attempts[attempts.length-1]);
+          break outer; // success exit all loops
+        } else {
+          attempts.push({ url, ok: false, status: res.status, variant: bs, count: 0, sigKind: s.kind });
+        }
+      }
+    }
+  }
+  if (!results.length) {
+    // Log first few attempts only to avoid spam
+    if (debug) console.warn('[vcgamers] getBrandProducts no data', brandKey, attempts.slice(0, 6));
+  }
+  return results;
 }
 
 export async function createOrder(req: VCGOrderRequest): Promise<VCGOrderResponse> {

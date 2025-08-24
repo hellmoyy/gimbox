@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { AUTH_SECRET as CFG_AUTH } from "@/lib/runtimeConfig";
 import { ObjectId } from "mongodb";
 import { getDb } from "../../../../../lib/mongodb";
+import { copyImageToCDN, shouldCopyRemote } from '@/lib/imageStore';
 
 function ensureAdmin(req: NextRequest) {
   const cookie = req.cookies.get("admin_session")?.value;
@@ -26,10 +27,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return Response.redirect(new URL("/admin/categories", req.url));
   }
 
+  let icon = String(form.get("icon") || "").trim();
+  const name = String(form.get("name") || "");
+  const code = String(form.get("code") || "");
+  if (icon && shouldCopyRemote(icon)) {
+    const copied = await copyImageToCDN(icon, { folder: 'categories', slug: code || name });
+    if (copied) icon = copied;
+  }
   const update: any = {
-    name: String(form.get("name") || ""),
-    code: String(form.get("code") || ""),
-    icon: String(form.get("icon") || ""),
+    name,
+    code,
+    icon,
     sort: form.get("sort") ? Number(form.get("sort")) : undefined,
     isActive: form.get("isActive") === "on",
   };

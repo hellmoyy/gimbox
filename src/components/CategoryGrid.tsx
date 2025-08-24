@@ -10,13 +10,13 @@ type Product = {
 };
 
 export default function CategoryGrid({ items, showLimit = 8 }: { items: Product[]; showLimit?: number }) {
-  const [expanded, setExpanded] = useState(false);
-  const visible = expanded ? items : items.slice(0, showLimit);
-  const hasMore = items.length > showLimit && !expanded;
+  const [visibleCount, setVisibleCount] = useState(showLimit);
+  const visible = items.slice(0, visibleCount);
+  const hasMore = visibleCount < items.length;
 
   return (
     <div>
-  <div className="grid grid-cols-3 gap-3">
+  <div className="grid grid-cols-4 gap-3">
         {visible.map((p) => (
           <div key={p.code} className="bg-[#fefefe] rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md transition p-1.5 w-full backdrop-blur-[2px]">
             <a href={`/topup/${p.code}`} className="block">
@@ -31,17 +31,15 @@ export default function CategoryGrid({ items, showLimit = 8 }: { items: Product[
           </div>
         ))}
       </div>
-      {hasMore ? (
+      {hasMore && (
         <div className="mt-3 text-center">
           <button
             type="button"
             className="text-[#0d6efd] hover:underline font-medium"
-            onClick={() => setExpanded(true)}
-          >
-            Selengkapnya
-          </button>
+            onClick={() => setVisibleCount(c => Math.min(items.length, c + showLimit))}
+          >Selengkapnya</button>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

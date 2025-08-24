@@ -6,7 +6,7 @@ export async function getProducts(filter: any = {}) {
     const items = await db
       .collection("products")
       .find({ isActive: { $ne: false }, ...filter })
-      .project({ name: 1, code: 1, icon: 1, category: 1, featured: 1, price: 1, cost: 1 })
+  .project({ name: 1, code: 1, icon: 1, category: 1, categories: 1, featured: 1, price: 1, cost: 1 })
       .sort({ featured: -1, name: 1 })
       .toArray();
     return items as any[];

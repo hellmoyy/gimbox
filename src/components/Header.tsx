@@ -7,7 +7,7 @@ export default function Header() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [products, setProducts] = useState<Array<{ name: string; code: string; icon: string; category?: string }>>([]);
+  const [brands, setBrands] = useState<Array<{ name: string; code: string; icon: string }>>([]);
   const [loaded, setLoaded] = useState(false);
   const [highlight, setHighlight] = useState<number>(-1);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -18,12 +18,12 @@ export default function Header() {
     if (!open || loaded) return;
     let active = true;
     setLoading(true);
-    fetch("/api/products")
+  fetch("/api/brands")
       .then((r) => r.json())
       .then((res) => {
         if (!active) return;
         const data = Array.isArray(res?.data) ? res.data : [];
-        setProducts(data);
+    setBrands(data);
         setLoaded(true);
       })
       .catch(() => {})
@@ -60,18 +60,16 @@ export default function Header() {
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return [] as typeof products;
-    return products.filter((p) =>
-      p.name?.toLowerCase().includes(term) || p.code?.toLowerCase().includes(term)
-    );
-  }, [q, products]);
+    if (!term) return [] as typeof brands;
+    return brands.filter((b) => b.name?.toLowerCase().includes(term) || b.code?.toLowerCase().includes(term));
+  }, [q, brands]);
 
   function goTo(idx: number) {
     const item = filtered[idx];
     if (!item) return;
     setOpen(false);
     setHighlight(-1);
-    router.push(`/topup/${item.code}`);
+  router.push(`/topup/${item.code}`);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -108,7 +106,7 @@ export default function Header() {
                 if (q.trim().length > 0) setOpen(true);
               }}
               onKeyDown={onKeyDown}
-              placeholder="Cari Game"
+              placeholder="Cari Brand"
               className="w-full rounded-full border border-slate-300/60 bg-[#fefefe] text-slate-900 placeholder-slate-400 px-4 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-orange-400"
             />
             <svg
@@ -133,7 +131,7 @@ export default function Header() {
                   {!loading && filtered.length === 0 && (
                     <div className="px-4 py-3 text-sm text-slate-500">Tidak ada hasil</div>
                   )}
-                  {!loading && filtered.slice(0, 10).map((it, idx) => (
+                  {!loading && filtered.slice(0, 10).map((it: any, idx: number) => (
                     <button
                       key={it.code}
                       type="button"
