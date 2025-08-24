@@ -3,9 +3,11 @@ import { getDb } from '@/lib/mongodb';
 import { copyImageToCDN, shouldCopyRemote } from '@/lib/imageStore';
 import { ensureAdminRequest } from '@/lib/adminAuth';
 
-export async function POST(req: NextRequest, context: { params: Promise<{ code: string }> } | { params: { code: string } }) {
-  const raw = (context as any)?.params;
-  const params: { code: string } = raw?.then ? await raw : raw;
+// Use a permissive context type so Next.js accepts the handler while still
+// gracefully handling the (rare) case where params might be a Promise.
+export async function POST(req: NextRequest, context: { params: { code: string } } | any) {
+  const raw = context?.params;
+  const params: { code: string } = raw && typeof raw.then === 'function' ? await raw : raw;
   if (!ensureAdminRequest(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const form = await req.formData();
   const name = String(form.get('name') || '').trim();
