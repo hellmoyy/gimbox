@@ -87,7 +87,68 @@ export async function GET(req: NextRequest) {
   const started = Date.now();
   let items: any[] = [];
   let attempts: any[] | undefined;
-  if (verbose && mode === 'brands2') {
+  if (verbose && mode === 'brands3') {
+    const apiKey = process.env.VCGAMERS_API_KEY || '';
+    const secret = process.env.VCGAMERS_SECRET_KEY || '';
+    const base = (process.env.VCGAMERS_BASE_URL || '').replace(/\/$/, '') || 'https://mitra-api.vcgamers.com';
+    const ts = Math.floor(Date.now()/1000).toString();
+    const path = '/v2/public/brands';
+    const candidates: string[] = [
+      'brands','brand','publicbrands','brandspublic','public/brands','category','categories',
+      '/v2/public/brands','v2/public/brands','v2publicbrands','/v2/public/brands'+ts,'brands'+ts
+    ];
+    // Build base strings per doc: secret + <params concatenated>; also variants with apiKey, timestamp orderings
+    const baseStrings: Array<{ label:string; value:string }> = [];
+    const uniq = new Set<string>();
+    const push = (label:string,val:string)=>{ if(!uniq.has(label+val)){ uniq.add(label+val); baseStrings.push({label,value:val}); } };
+    for (const c of candidates) {
+      push('secret+'+c, secret + c);
+      push('secret+'+c+'+ts', secret + c + ts);
+      if (apiKey) {
+        push('secret+apiKey+'+c, secret + apiKey + c);
+        push('secret+apiKey+'+c+'+ts', secret + apiKey + c + ts);
+        push('secret+'+c+'+apiKey', secret + c + apiKey);
+      }
+    }
+    // Build signatures using documented algorithm:
+    // hmac = HMAC_SHA512(baseString, secret) -> hex -> base64(hex)
+    // also variant: base64(raw hmac bytes)
+    attempts = [];
+    const signParamNames = ['sign','signature'];
+    let found = false;
+    for (const bs of baseStrings.slice(0,120)) {
+      let hexDigest = '';
+      let rawDigest: Buffer | undefined;
+      try { rawDigest = crypto.createHmac('sha512', secret).update(bs.value).digest(); hexDigest = rawDigest.toString('hex'); } catch{}
+      if (!hexDigest) continue;
+      const sigHexBase64 = Buffer.from(hexDigest).toString('base64');
+      const sigRawBase64 = rawDigest ? rawDigest.toString('base64') : sigHexBase64; // fallback
+      const sigVariants: Array<{ label:string; sig:string }> = [
+        { label: bs.label+':hmacHex->b64', sig: sigHexBase64 },
+        { label: bs.label+':hmacRaw->b64', sig: sigRawBase64 },
+      ];
+      for (const sv of sigVariants) {
+        for (const sp of signParamNames) {
+          const url = `${base}${path}?${sp}=${encodeURIComponent(sv.sig)}`;
+          const startedAt = Date.now();
+          let status=0; let ok=false; let body=''; let error: string|undefined;
+          try {
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` }});
+            status = res.status; ok = res.ok; body = await res.text();
+          } catch(e:any){ error = e?.message || String(e); }
+          let brandItems: any[] = [];
+          if (ok) {
+            try { const json = JSON.parse(body||'{}'); brandItems = Array.isArray(json?.data) ? json.data : (Array.isArray(json)?json:[]); } catch{}
+          }
+          attempts.push({ url, sigLabel: sv.label, signParam: sp, status, ok, items: brandItems.length, ms: Date.now()-startedAt, snippet: body.slice(0,160) });
+          if (brandItems.length) { items = brandItems.map(it => ({ code: String(it.code || it.brand_code || it.id || ''), name: String(it.name || it.brand_name || ''), cost: 0, icon: it.logo || it.icon, category: it.category })); found = true; break; }
+          if (attempts.length >= 200) { found = true; break; }
+        }
+        if (found) break;
+      }
+      if (found) break;
+    }
+  } else if (verbose && mode === 'brands2') {
     // Advanced signature probing for brands endpoint.
     const apiKey = process.env.VCGAMERS_API_KEY || '';
     const secret = process.env.VCGAMERS_SECRET_KEY || '';
