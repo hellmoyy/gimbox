@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDb } from "../../../lib/mongodb";
 import DeleteButton from "@/components/admin/DeleteButton";
+import FullSyncButton from '@/components/admin/FullSyncButton';
 
 type QueryParams = { imported?: string; provider?: string; synced?: string };
 
@@ -40,10 +41,7 @@ export default async function AdminProducts({ searchParams }: { searchParams: Pr
           <Link href="/admin/products/[id]" as="/admin/products/new" className="bg-green-600 text-white px-3 py-2 rounded">Tambah</Link>
           <Link href="/admin/products/import-new" className="bg-emerald-600 text-white px-3 py-2 rounded">Import Produk Baru</Link>
           <Link href="/admin/products/sync" className="bg-indigo-600 text-white px-3 py-2 rounded">Sync Harga</Link>
-          <form action="/api/admin/providers/vcgamers/sync" method="post" className="inline-block" suppressHydrationWarning>
-            <input type="hidden" name="deactivateMissing" value="true" />
-            <button className="bg-orange-600 text-white px-3 py-2 rounded" formAction="/api/admin/providers/vcgamers/sync">Full Sync VCG</button>
-          </form>
+          <FullSyncButton />
         </div>
       </div>
       {imported > 0 && (
