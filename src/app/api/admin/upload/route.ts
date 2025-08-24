@@ -3,6 +3,7 @@ import path from "path";
 import { promises as fs } from "fs";
 import sharp from "sharp";
 import { ensureAdminRequest } from "@/lib/adminAuth";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,7 +28,10 @@ export async function POST(req: NextRequest) {
     const nameBase = (form.get("name") as string) || `img`;
     const safeBase = nameBase.toLowerCase().replace(/[^a-z0-9-_]+/g, "-").replace(/-+/g, "-").replace(/^-|-$|\.$/g, "");
     const uniq = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const destDir = path.join(process.cwd(), "public", "images", "uploads", folder);
+  const destDir = path.join(process.cwd(), "public", "images", "uploads", folder);
+  // NOTE: On platforms with ephemeral filesystem (e.g. Railway, Vercel), these written files will not persist
+  // across deployments or may not be accessible by the static file server. For production durability,
+  // integrate an object storage (S3 / R2 / Supabase) and replace local writes with remote uploads.
     await fs.mkdir(destDir, { recursive: true });
 
     if (isSvg) {
@@ -95,32 +99,70 @@ export async function POST(req: NextRequest) {
       outputs.push({ name: `${baseName}.${targetFormat === 'webp' ? 'webp' : (meta?.hasAlpha && meta?.format === 'png' ? 'png' : 'jpg')}`, buffer: assetBuf });
     }
 
-    // Persist all generated variants
-    for (const o of outputs) {
-      const full = path.join(destDir, o.name);
-      try {
-        await fs.writeFile(full, o.buffer);
-      } catch (e) {
-        console.error("upload: gagal tulis file", full, e);
-        return Response.json({ error: "Gagal menyimpan file (filesystem tidak writable di server)." }, { status: 500 });
+    const useR2 = !!process.env.R2_BUCKET && !!process.env.R2_ACCESS_KEY_ID && !!process.env.R2_SECRET_ACCESS_KEY;
+    if (useR2) {
+      // Cloudflare R2 (S3 compatible) upload
+      const endpoint = process.env.R2_ENDPOINT || `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+      const client = new S3Client({
+        region: "auto",
+        endpoint,
+        credentials: {
+          accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+        },
+      });
+      const bucket = process.env.R2_BUCKET!;
+      const basePublic = (process.env.R2_PUBLIC_BASE || `${endpoint}/${bucket}`).replace(/\/$/, "");
+      const variantsUrls: string[] = [];
+      for (let i = 0; i < outputs.length; i++) {
+        const o = outputs[i];
+        const key = `${folder}/${o.name}`;
+        try {
+          await client.send(new PutObjectCommand({
+            Bucket: bucket,
+            Key: key,
+            Body: o.buffer,
+            ContentType: o.name.endsWith('.webp') ? 'image/webp' : (o.name.endsWith('.jpg') || o.name.endsWith('.jpeg') ? 'image/jpeg' : 'application/octet-stream'),
+            ACL: undefined, // R2 ignores ACL; bucket should be public via policy or custom domain
+          }));
+          const publicUrl = `${basePublic}/${key}`;
+          if (i === 0) {
+            variantsUrls.unshift(publicUrl); // placeholder; will pop later
+          } else {
+            variantsUrls.push(publicUrl);
+          }
+        } catch (e) {
+          console.error('R2 upload gagal', key, e);
+          return Response.json({ error: 'Gagal upload ke storage (R2).' }, { status: 500 });
+        }
       }
+      const url = variantsUrls.shift()!; // first variant (lg) as primary
+      const variants = variantsUrls;
+      const debugSizes = Object.fromEntries(outputs.map(o => [o.name, o.buffer.length]));
+      return Response.json({ url, variants, debug: { folder, count: outputs.length, sizes: debugSizes, storage: 'r2' } });
+    } else {
+      // Local FS write (dev / fallback). Not persistent on ephemeral hosts.
+      for (const o of outputs) {
+        const full = path.join(destDir, o.name);
+        try {
+          await fs.writeFile(full, o.buffer);
+        } catch (e) {
+          console.error("upload: gagal tulis file", full, e);
+          return Response.json({ error: "Gagal menyimpan file (filesystem tidak writable di server)." }, { status: 500 });
+        }
+      }
+      const firstPath = path.join(destDir, outputs[0].name);
+      try {
+        await fs.stat(firstPath);
+      } catch (e) {
+        console.error("upload: file pertama tidak ditemukan setelah tulis", firstPath, e);
+        return Response.json({ error: "File tidak tersedia setelah upload (kemungkinan storage ephemeral)." }, { status: 500 });
+      }
+      const url = `/images/uploads/${folder}/${outputs[0].name}`;
+      const variants = outputs.slice(1).map(o => `/images/uploads/${folder}/${o.name}`);
+      const debugSizes = Object.fromEntries(outputs.map(o => [o.name, o.buffer.length]));
+      return Response.json({ url, variants, debug: { folder, count: outputs.length, sizes: debugSizes, storage: 'local' } });
     }
-
-    // Verify first file really exists (diagnostic)
-    const firstPath = path.join(destDir, outputs[0].name);
-    try {
-      await fs.stat(firstPath);
-    } catch (e) {
-      console.error("upload: file pertama tidak ditemukan setelah tulis", firstPath, e);
-      return Response.json({ error: "File tidak tersedia setelah upload (kemungkinan storage ephemeral)." }, { status: 500 });
-    }
-
-    // Primary URL = first variant
-    const url = `/images/uploads/${folder}/${outputs[0].name}`;
-    const variants = outputs.slice(1).map(o => `/images/uploads/${folder}/${o.name}`);
-  // Collect debug sizes (bytes) to help tune compression
-  const debugSizes = Object.fromEntries(outputs.map(o => [o.name, o.buffer.length]));
-  return Response.json({ url, variants, debug: { folder, count: outputs.length, sizes: debugSizes } });
   } catch (err: any) {
     console.error("/api/admin/upload error:", err);
     return Response.json({ error: "Upload gagal. Coba lagi atau gunakan format PNG/JPG/SVG." }, { status: 500 });
