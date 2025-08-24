@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import crypto from "crypto";
+import { getDb } from '../mongodb';
 import { VCGAMERS_API_KEY as CFG_KEY, VCGAMERS_SECRET_KEY as CFG_SECRET, VCGAMERS_SANDBOX as CFG_SANDBOX } from "../runtimeConfig";
 
 export type VCGOrderRequest = {
@@ -179,9 +180,21 @@ export async function getBrands(): Promise<Array<{ key: string; name: string; im
       }
     }
     if (debug) console.warn('[vcgamers] getBrands no data attempts sample', attempts.slice(0,5));
+    if (debug) {
+      try {
+        const db = await getDb();
+        await db.collection('vcg_attempts').insertOne({ kind: 'brands', attempts: attempts.slice(0,25), createdAt: new Date() });
+      } catch {}
+    }
     return [];
   } catch (e:any) {
     console.warn('[vcgamers] getBrands error', e?.message||e);
+    if (debug) {
+      try {
+        const db = await getDb();
+        await db.collection('vcg_attempts').insertOne({ kind: 'brandsError', error: String(e?.message||e), createdAt: new Date() });
+      } catch {}
+    }
     return [];
   }
 }
@@ -270,6 +283,17 @@ export async function getBrandProducts(brandKey: string): Promise<Array<{ provid
   if (!results.length) {
     // Log first few attempts only to avoid spam
     if (debug) console.warn('[vcgamers] getBrandProducts no data', brandKey, attempts.slice(0, 6));
+    if (debug) {
+      try {
+        const db = await getDb();
+        await db.collection('vcg_attempts').insertOne({
+          kind: 'brandProducts',
+            brandKey,
+            attempts: attempts.slice(0, 25),
+            createdAt: new Date()
+        });
+      } catch {}
+    }
   }
   return results;
 }
