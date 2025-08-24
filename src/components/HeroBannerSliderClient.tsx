@@ -9,6 +9,11 @@ export type BannerSlide = { image: string; link?: string; variants?: string[] };
 export default function HeroBannerSliderClient({ slides, intervalMs = 5000 }: { slides: BannerSlide[]; intervalMs?: number }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [ready, setReady] = useState(false);
+  useEffect(()=>{
+    // Client side debug to verify slides arrive in production
+    // eslint-disable-next-line no-console
+    console.log('[HeroBannerSliderClient] init slides', slides?.length, slides?.[0]);
+  }, [slides]);
 
   // Simple autoplay plugin for Keen
   function AutoplayPlugin(slider: any) {

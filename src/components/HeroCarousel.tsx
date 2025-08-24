@@ -4,6 +4,10 @@ import HeroBannerSliderClient from "@/components/HeroBannerSliderClient";
 
 export default async function HeroCarousel() {
   const banners = (await getBanners(true)) || [];
+  // Debug marker (view page source) helps diagnose production issue where slider not appearing
+  // Remove once resolved.
+  // eslint-disable-next-line no-console
+  console.log('[HeroCarousel] fetched banners:', banners.length, banners.map(b=>({image:b.image, variants:(b as any).variants?.length||0})));
   if (!banners.length) return null;
   function renderPicture(b: any) {
     const vars: string[] = Array.isArray(b.variants) ? b.variants : [];
@@ -37,5 +41,12 @@ export default async function HeroCarousel() {
   }
   // Map banners to slides with primary image (largest) and preserve link
   const slides = banners.map((b: any) => ({ image: (Array.isArray(b.variants) && (b.variants.find((v:string)=>/-md\./.test(v)) || b.variants.find((v:string)=>/-lg\./.test(v)))) || b.image, link: b.link, variants: b.variants }));
+  if (!slides.length) {
+    return (
+      <section className="mx-auto max-w-6xl px-4 mt-4">
+        <div className="text-sm text-gray-500">Tidak ada banner aktif (debug).</div>
+      </section>
+    );
+  }
   return <HeroBannerSliderClient slides={slides as any} />;
 }
