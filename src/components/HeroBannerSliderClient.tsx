@@ -4,7 +4,7 @@ import { useKeenSlider } from "keen-slider/react";
 import "keen-slider/keen-slider.min.css";
 import SmartImage from "@/components/SmartImage";
 
-export type BannerSlide = { image: string; link?: string };
+export type BannerSlide = { image: string; link?: string; variants?: string[] };
 
 export default function HeroBannerSliderClient({ slides, intervalMs = 5000 }: { slides: BannerSlide[]; intervalMs?: number }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -91,13 +91,22 @@ export default function HeroBannerSliderClient({ slides, intervalMs = 5000 }: { 
               <div key={`slide-${idx}`} className="keen-slider__slide h-full flex">
                 <div className="w-full h-full rounded-2xl shadow overflow-hidden bg-[#fefefe]">
                   <div className="relative w-full h-full">
-                    {s.link && s.link.trim() !== "" ? (
-                      <a href={s.link} className="absolute inset-0 block">
-                        <SmartImage src={s.image} alt="Banner" className="w-full h-full object-cover object-center" loading="eager" />
-                      </a>
-                    ) : (
-                      <SmartImage src={s.image} alt="Banner" className="absolute inset-0 w-full h-full object-cover object-center" loading="eager" />
-                    )}
+                    {(() => {
+                      const vars = Array.isArray(s.variants) ? s.variants : [];
+                      const md = vars.find(v=>/-md\./.test(v));
+                      const lg = vars.find(v=>/-lg\./.test(v)) || s.image;
+                      const picture = (
+                        <picture>
+                          {md && <source media="(max-width:900px)" srcSet={md} />}
+                          <source media="(min-width:901px)" srcSet={lg} />
+                          <SmartImage src={lg} alt="Banner" className="absolute inset-0 w-full h-full object-cover object-center" loading="eager" />
+                        </picture>
+                      );
+                      if (s.link && s.link.trim() !== "") {
+                        return <a href={s.link} className="absolute inset-0 block">{picture}</a>;
+                      }
+                      return picture;
+                    })()}
                   </div>
                 </div>
               </div>

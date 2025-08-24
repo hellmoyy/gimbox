@@ -9,6 +9,11 @@ export async function POST(req: NextRequest) {
     image: String(form.get("image") || ""),
     link: String(form.get("link") || ""),
     isActive: form.get("isActive") === "on",
+    // Optional responsive variants (comma separated) coming from upload response
+    variants: (String(form.get("variants") || "")
+      .split(/[,\n]/)
+      .map(s => s.trim())
+      .filter(Boolean)) || [],
   };
   const sortRaw = form.get("sort");
   if (typeof sortRaw === "string" && sortRaw !== "") doc.sort = Number(sortRaw);

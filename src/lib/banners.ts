@@ -6,6 +6,7 @@ export type Banner = {
   link?: string; // Optional click target URL
   sort?: number;
   isActive?: boolean;
+  variants?: string[]; // Optional responsive variants (md, etc.)
 };
 
 // No defaults for images; admin should upload. Keep empty to avoid broken UI.
@@ -19,7 +20,7 @@ export async function getBanners(onlyActive = true): Promise<Banner[]> {
   const docs = await db
       .collection("banners")
       .find(filter)
-      .project({ _id: 0, image: 1, link: 1, sort: 1, isActive: 1 })
+  .project({ _id: 0, image: 1, link: 1, sort: 1, isActive: 1, variants: 1 })
       .sort({ sort: 1, _id: 1 })
       .toArray();
   const cleaned = (docs as any[]).filter((d) => typeof d.image === "string" && d.image.trim() !== "");
