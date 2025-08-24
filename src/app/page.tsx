@@ -22,3 +22,7 @@ export default async function Home() {
     </main>
   );
 }
+
+// Force dynamic so banner DB fetch isn't statically optimized away in production
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
