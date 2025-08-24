@@ -77,10 +77,27 @@ export default async function BrandDetail(props: { params: any }) {
           </div>
           <p className="text-xs text-slate-500 mt-1">Atur di seksi home mana brand muncul.</p>
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Urutan Populer</label>
-          <input name="featuredOrder" type="number" min="0" defaultValue={brand.featuredOrder ?? ''} className="w-full border rounded px-3 py-2 bg-[#fefefe]" placeholder="Kosongkan" />
-          <p className="text-xs text-slate-500 mt-1">Jika diisi dan brand Populer, angka kecil akan tampil lebih awal.</p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-medium mb-1">Urut Populer</label>
+            <input name="featuredOrder" type="number" min="0" defaultValue={brand.featuredOrder ?? ''} className="w-full border rounded px-2 py-1 text-sm bg-[#fefefe]" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1">Urut Baru Rilis</label>
+            <input name="newReleaseOrder" type="number" min="0" defaultValue={brand.newReleaseOrder ?? ''} className="w-full border rounded px-2 py-1 text-sm bg-[#fefefe]" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1">Urut Voucher</label>
+            <input name="voucherOrder" type="number" min="0" defaultValue={brand.voucherOrder ?? ''} className="w-full border rounded px-2 py-1 text-sm bg-[#fefefe]" />
+          </div>
+            <div>
+            <label className="block text-xs font-medium mb-1">Urut Pulsa & Tagihan</label>
+            <input name="pulsaTagihanOrder" type="number" min="0" defaultValue={brand.pulsaTagihanOrder ?? ''} className="w-full border rounded px-2 py-1 text-sm bg-[#fefefe]" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1">Urut Entertainment</label>
+            <input name="entertainmentOrder" type="number" min="0" defaultValue={brand.entertainmentOrder ?? ''} className="w-full border rounded px-2 py-1 text-sm bg-[#fefefe]" />
+          </div>
         </div>
         <button className="bg-indigo-600 text-white px-4 py-2 rounded">Simpan</button>
       </form>

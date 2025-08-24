@@ -24,6 +24,10 @@ export async function POST(req: NextRequest, context: { params: { code: string }
   const pulsaTagihan = form.get('pulsaTagihan') === 'on';
   const entertainment = form.get('entertainment') === 'on';
   const featuredOrderRaw = form.get('featuredOrder');
+  const newReleaseOrderRaw = form.get('newReleaseOrder');
+  const voucherOrderRaw = form.get('voucherOrder');
+  const pulsaTagihanOrderRaw = form.get('pulsaTagihanOrder');
+  const entertainmentOrderRaw = form.get('entertainmentOrder');
   const doc: any = { updatedAt: new Date(), isActive };
   if (name) doc.name = name;
   if (iconRaw) {
@@ -78,6 +82,22 @@ export async function POST(req: NextRequest, context: { params: { code: string }
   if (featuredOrderRaw !== null && featuredOrderRaw !== undefined) {
     const val = String(featuredOrderRaw).trim();
     doc.featuredOrder = val === '' ? undefined : Number(val);
+  }
+  if (newReleaseOrderRaw !== null && newReleaseOrderRaw !== undefined) {
+    const val = String(newReleaseOrderRaw).trim();
+    doc.newReleaseOrder = val === '' ? undefined : Number(val);
+  }
+  if (voucherOrderRaw !== null && voucherOrderRaw !== undefined) {
+    const val = String(voucherOrderRaw).trim();
+    doc.voucherOrder = val === '' ? undefined : Number(val);
+  }
+  if (pulsaTagihanOrderRaw !== null && pulsaTagihanOrderRaw !== undefined) {
+    const val = String(pulsaTagihanOrderRaw).trim();
+    doc.pulsaTagihanOrder = val === '' ? undefined : Number(val);
+  }
+  if (entertainmentOrderRaw !== null && entertainmentOrderRaw !== undefined) {
+    const val = String(entertainmentOrderRaw).trim();
+    doc.entertainmentOrder = val === '' ? undefined : Number(val);
   }
   try {
     const db = await getDb();

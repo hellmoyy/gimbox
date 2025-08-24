@@ -23,6 +23,10 @@ export async function POST(req: NextRequest) {
   const pulsaTagihan = form.get('pulsaTagihan') === 'on';
   const entertainment = form.get('entertainment') === 'on';
   const featuredOrderRaw = form.get('featuredOrder');
+  const newReleaseOrderRaw = form.get('newReleaseOrder');
+  const voucherOrderRaw = form.get('voucherOrder');
+  const pulsaTagihanOrderRaw = form.get('pulsaTagihanOrder');
+  const entertainmentOrderRaw = form.get('entertainmentOrder');
   if (!code) return NextResponse.json({ error: 'Code required' }, { status: 400 });
   const aliases = aliasesRaw ? Array.from(new Set(aliasesRaw.split(/[,\n]/).map(s=>s.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''))).values()).filter(Boolean) : [];
   let providerRefs: Record<string,string[]> | undefined = undefined;
@@ -59,6 +63,10 @@ export async function POST(req: NextRequest) {
   pulsaTagihan,
   entertainment,
   featuredOrder: featuredOrderRaw !== null && featuredOrderRaw !== undefined && String(featuredOrderRaw).trim() !== '' ? Number(featuredOrderRaw) : undefined,
+  newReleaseOrder: newReleaseOrderRaw !== null && newReleaseOrderRaw !== undefined && String(newReleaseOrderRaw).trim() !== '' ? Number(newReleaseOrderRaw) : undefined,
+  voucherOrder: voucherOrderRaw !== null && voucherOrderRaw !== undefined && String(voucherOrderRaw).trim() !== '' ? Number(voucherOrderRaw) : undefined,
+  pulsaTagihanOrder: pulsaTagihanOrderRaw !== null && pulsaTagihanOrderRaw !== undefined && String(pulsaTagihanOrderRaw).trim() !== '' ? Number(pulsaTagihanOrderRaw) : undefined,
+  entertainmentOrder: entertainmentOrderRaw !== null && entertainmentOrderRaw !== undefined && String(entertainmentOrderRaw).trim() !== '' ? Number(entertainmentOrderRaw) : undefined,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

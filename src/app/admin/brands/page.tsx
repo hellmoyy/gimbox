@@ -102,7 +102,7 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
               <th className="p-3">Publisher</th>
               <th className="p-3">Markup%</th>
               <th className="p-3">Flags</th>
-              <th className="p-3">Urut Populer</th>
+              <th className="p-3">Urutan</th>
               <th className="p-3">Status</th>
               <th className="p-3">Updated</th>
               <th className="p-3">Aksi</th>
@@ -133,7 +133,16 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
                     {b.entertainment && <span className="px-1.5 py-0.5 bg-fuchsia-500/10 text-fuchsia-600 rounded">Entertain</span>}
                   </div>
                 </td>
-                <td className="p-3 text-xs">{b.featured && typeof b.featuredOrder === 'number' ? b.featuredOrder : '-'}</td>
+                <td className="p-3 text-[10px] leading-4">
+                  <div className="flex flex-wrap gap-1">
+                    {b.featured && typeof b.featuredOrder === 'number' && <span className="px-1 py-0.5 bg-slate-100 rounded">P:{b.featuredOrder}</span>}
+                    {b.newRelease && typeof b.newReleaseOrder === 'number' && <span className="px-1 py-0.5 bg-slate-100 rounded">B:{b.newReleaseOrder}</span>}
+                    {b.voucher && typeof b.voucherOrder === 'number' && <span className="px-1 py-0.5 bg-slate-100 rounded">V:{b.voucherOrder}</span>}
+                    {b.pulsaTagihan && typeof b.pulsaTagihanOrder === 'number' && <span className="px-1 py-0.5 bg-slate-100 rounded">PL:{b.pulsaTagihanOrder}</span>}
+                    {b.entertainment && typeof b.entertainmentOrder === 'number' && <span className="px-1 py-0.5 bg-slate-100 rounded">E:{b.entertainmentOrder}</span>}
+                    {!b.featured && !b.newRelease && !b.voucher && !b.pulsaTagihan && !b.entertainment && <span className="text-slate-400">-</span>}
+                  </div>
+                </td>
                 <td className="p-3 text-xs">
                   <span className={`px-2 py-0.5 rounded text-xs ${b.isActive === false ? 'bg-red-600/10 text-red-700' : 'bg-green-600/10 text-green-700'}`}>{b.isActive === false ? 'Nonaktif' : 'Aktif'}</span>
                 </td>
