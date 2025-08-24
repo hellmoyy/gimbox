@@ -1,6 +1,6 @@
 export default function Footer() {
   return (
-  <footer className="mt-8 border-t border-slate-200 bg-[#fefefe] text-slate-600">
+  <footer className="mt-8 border-t border-slate-200/60 bg-[#fefefe] text-slate-600 backdrop-blur-[2px]">
       <div className="mx-auto max-w-6xl px-4 py-6">
         <div className="text-center text-xs text-slate-500">METODE PEMBAYARAN</div>
         <div className="mt-2 flex items-center justify-center">

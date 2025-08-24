@@ -12,6 +12,7 @@ function formatRupiah(n?: number) {
 function normalizeMethod(method?: string) {
   const m = String(method || "").toLowerCase();
   if (m === 'wallet' || m === 'gimcash') return 'gimcash';
+  if (m === 'duitku') return 'duitku';
   if (m.includes("qris") || /\bqr\b/.test(m)) return "qris";
   // Bank transfer synonyms: rekening/rek, tf, bank names
   if (
@@ -142,6 +143,7 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
   const icon = useMemo(() => {
     const method = String(methodNorm || "");
   if (method === 'gimcash') return '/images/logo/logo128.png';
+  if (method === 'duitku') return '/images/iconpayment/emoney.png';
     if (method === "qris") return "/images/iconpayment/qris.png";
     if (method === "bank_transfer") return "/images/iconpayment/bank.png";
     if (method === "va") return "/images/iconpayment/va.png";
@@ -151,6 +153,7 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
 
   const methodLabel = useMemo(() => {
   if (methodNorm === 'gimcash') return 'GimCash';
+  if (methodNorm === 'duitku') return 'Duitku';
     if (methodNorm === 'bank_transfer') return 'Transfer Bank (BCA)';
     if (methodNorm === 'qris') return 'QRIS';
     if (methodNorm === 'va') return 'Virtual Account';
@@ -201,8 +204,8 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
         ) : null}
 
         {/* Rincian Card (moved above payment card) */}
-        <div className="rounded-xl border border-slate-200 bg-[#fefefe] overflow-hidden mb-3">
-          <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="rounded-xl border border-slate-200/60 bg-[#fefefe] overflow-hidden mb-3 backdrop-blur-[2px]">
+          <div className="px-4 py-3 border-b border-slate-200/60 flex items-center justify-between">
             <div className="text-sm font-semibold text-slate-900">Pembelian Anda</div>
           </div>
           <div className="p-4">
@@ -220,7 +223,7 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
                 <span className="font-semibold">{String(code).padStart(3, '0')}</span>
               </div>
             )}
-            <div className="text-sm text-slate-900 flex items-center justify-between mt-2 border-t border-slate-200 pt-2">
+            <div className="text-sm text-slate-900 flex items-center justify-between mt-2 border-t border-slate-200/60 pt-2">
               <span className="font-semibold">Total</span>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-[#0d6efd]">{methodNorm === 'bank_transfer' ? formatRupiah(amountWithCode) : formatRupiah(Number(payment.amount ?? 0) || 0)}</span>
@@ -231,8 +234,8 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
         </div>
 
         {/* Payment Card */}
-        <div className="rounded-xl border border-slate-200 bg-[#fefefe] overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="rounded-xl border border-slate-200/60 bg-[#fefefe] overflow-hidden backdrop-blur-[2px]">
+          <div className="px-4 py-3 border-b border-slate-200/60 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <img src={icon} alt="metode" className="w-8 h-8 object-contain" />
               <div className="text-sm">
@@ -378,7 +381,7 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
                   return (
                     <div className="text-center">
                       <div className="mb-2 text-sm text-slate-700">Scan QR untuk membayar:</div>
-                      <div className="inline-flex p-2 rounded-lg border border-slate-200 bg-white">
+                      <div className="inline-flex p-2 rounded-lg border border-slate-200/60 bg-white/95 backdrop-blur-sm">
                         <div className="relative w-44 h-44">
                           <img
                             src={qrSrc}
@@ -433,17 +436,31 @@ export default function PaymentInstructionsPage({ params }: { params: Promise<{ 
                 )}
 
                 {/* Generic fallback */}
-                {!["bank_transfer", "emoney", "qris", "va"].includes(String(methodNorm)) && (
+                {!["bank_transfer", "emoney", "qris", "va", "duitku"].includes(String(methodNorm)) && (
                   <div className="space-y-2">
                     <InfoRow label="Nominal" value={formatRupiah(payment.amount)} copy />
                     <div className="text-xs text-slate-500">Ikuti instruksi sesuai metode yang dipilih.</div>
+                  </div>
+                )}
+                {methodNorm === 'duitku' && !isExpired && (
+                  <div className="space-y-3">
+                    <div className="text-sm text-slate-700">Selesaikan pembayaran melalui halaman Duitku.</div>
+                    {payment.paymentUrl ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <a href={payment.paymentUrl} target="_blank" rel="noopener noreferrer" className="text-xs px-3 py-2 rounded bg-[#0d6efd] text-white hover:bg-[#0b5ed7]">Buka Halaman Pembayaran</a>
+                        <div className="text-[11px] text-slate-500 text-center">Jika halaman tidak terbuka otomatis, klik tombol di atas.</div>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-500">Menunggu link pembayaran...</div>
+                    )}
+                    <div className="text-xs text-slate-500">Jangan tutup halaman ini sampai Anda menyelesaikan pembayaran. Status akan diperbarui otomatis setiap 10 detik.</div>
                   </div>
                 )}
               </>
             )}
           </div>
 
-          <div className="px-4 py-3 border-t border-slate-200 flex items-center justify-between">
+          <div className="px-4 py-3 border-t border-slate-200/60 flex items-center justify-between">
             <a href="/" className="text-xs px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-50">Beranda</a>
             <a href="/transactions" className="text-xs px-3 py-1.5 rounded bg-[#0d6efd] text-white">Lihat Transaksi</a>
           </div>
@@ -458,13 +475,13 @@ function InfoRow({ label, value, copy }: { label: string; value: string; copy?: 
     try { await navigator.clipboard.writeText(value.replace(/^Nominal:\s*/i, "")); } catch {}
   }
   return (
-    <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2">
+  <div className="flex items-center justify-between rounded-lg border border-slate-200/60 px-3 py-2 bg-white/95 backdrop-blur-sm">
       <div>
         <div className="text-[11px] text-slate-500">{label}</div>
         <div className="text-sm font-semibold text-slate-900">{value}</div>
       </div>
       {copy && (
-        <button type="button" onClick={doCopy} className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-50">Salin</button>
+    <button type="button" onClick={doCopy} className="text-xs px-2 py-1 rounded border border-slate-300/60 text-slate-700 hover:bg-slate-50">Salin</button>
       )}
     </div>
   );
@@ -475,13 +492,13 @@ function CopyButton({ text }: { text: string }) {
     try { await navigator.clipboard.writeText(text); } catch {}
   }
   return (
-    <button type="button" onClick={doCopy} className="text-[11px] px-2 py-0.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-50">Salin</button>
+  <button type="button" onClick={doCopy} className="text-[11px] px-2 py-0.5 rounded border border-slate-300/60 text-slate-700 hover:bg-slate-50">Salin</button>
   );
 }
 
 function WalletItem({ name, src }: { name: string; src: string }) {
   return (
-    <li className="rounded border border-slate-200 px-3 py-2 bg-white flex items-center gap-2">
+  <li className="rounded border border-slate-200/60 px-3 py-2 bg-white/95 backdrop-blur-sm flex items-center gap-2">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}

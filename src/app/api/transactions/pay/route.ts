@@ -128,6 +128,31 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Duitku pending instruction support
+    if (gateway === 'duitku') {
+      const d = (order as any).details || {};
+      const duitku = d.duitku || {};
+      return NextResponse.json({
+        success: true,
+        status: 'pending',
+        method: order.method || 'duitku',
+        amount: sellPrice,
+        productCode: (order as any).productCode,
+        productLabel: (order as any).productLabel,
+        variantLabel: (order as any).variantLabel,
+        variantPrice: (order as any).variantPrice,
+        baseAmount,
+        feesTotal,
+        feesGateway,
+        feesAdmin,
+        feesOther,
+        feePercent,
+        paymentUrl: duitku.paymentUrl,
+        paymentMethod: duitku.paymentMethod,
+        expiresAt: expiresAt.toISOString(),
+      });
+    }
+
     if (gateway !== "midtrans") {
       return NextResponse.json({ success: false, message: `Gateway ${gateway} belum didukung untuk lanjut bayar` }, { status: 400 });
     }

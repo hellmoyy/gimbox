@@ -18,7 +18,7 @@ export default function CategoryGrid({ items, showLimit = 8 }: { items: Product[
     <div>
   <div className="grid grid-cols-3 gap-3">
         {visible.map((p) => (
-          <div key={p.code} className="bg-[#fefefe] rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition p-1.5 w-full">
+          <div key={p.code} className="bg-[#fefefe] rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md transition p-1.5 w-full backdrop-blur-[2px]">
             <a href={`/topup/${p.code}`} className="block">
               <div className="relative">
                 <SmartImage src={(p.icon as unknown as string) || "/images/logo/gimbox.gif"} alt={p.name} className="w-full aspect-square rounded-xl object-cover" />

@@ -90,7 +90,7 @@ export default function Header() {
     }
   }
   return (
-  <header className="sticky top-0 z-40 w-full bg-[#fefefe] text-slate-800 border-b border-slate-200">
+  <header className="sticky top-0 z-40 w-full bg-[#fefefe] text-slate-800 border-b border-slate-200/60 backdrop-blur-[2px]">
       <div className="bg-[#fefefe] text-slate-800">
   <div className="mx-auto w-full max-w-md px-4 py-3 flex items-center gap-4">
           <Link href="/" className="flex items-center">
@@ -109,7 +109,7 @@ export default function Header() {
               }}
               onKeyDown={onKeyDown}
               placeholder="Cari Game"
-              className="w-full rounded-full border border-slate-300 bg-[#fefefe] text-slate-900 placeholder-slate-400 px-4 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-orange-400"
+              className="w-full rounded-full border border-slate-300/60 bg-[#fefefe] text-slate-900 placeholder-slate-400 px-4 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-orange-400"
             />
             <svg
               className="pointer-events-none absolute left-3 top-2.5 w-5 h-5 text-slate-400"
@@ -125,7 +125,7 @@ export default function Header() {
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             {open && (
-              <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-xl border border-slate-200 bg-white shadow-lg">
+              <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-xl border border-slate-200/60 bg-white/95 backdrop-blur-sm shadow-lg">
                 <div className="max-h-80 overflow-auto py-1">
                   {loading && (
                     <div className="px-4 py-3 text-sm text-slate-500">Mencari…</div>

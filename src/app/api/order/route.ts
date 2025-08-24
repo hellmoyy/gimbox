@@ -245,6 +245,75 @@ export async function POST(req: NextRequest) {
     return Response.json({ success: true, message: "Order dibuat. Lanjutkan pembayaran.", orderId });
   }
 
+  // Branch C: Duitku
+  if (gateway === 'duitku') {
+    const db = await getDb();
+    const orderId = digiflazzPayload.order_id; // reuse generated id
+    try {
+      // Basic validation
+      if (!email) return Response.json({ success: false, message: 'Email diperlukan untuk Duitku' }, { status: 400 });
+      // Build create-transaction payload (delegate to internal API)
+      const origin = (req as any).nextUrl?.origin || process.env.APP_BASE_URL || '';
+      const callbackUrl = origin ? origin + '/api/payment/duitku/callback' : undefined;
+      const returnUrl = origin ? origin + '/payment-instructions/' + orderId : undefined;
+      const paymentAmount = totalSellPrice; // include gatewayFee already in totalSellPrice
+      const paymentMethod = method.toUpperCase();
+      let paymentUrl: string | undefined;
+      try {
+        const resp = await fetch(origin + '/api/payment/duitku/create-transaction', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentAmount,
+            paymentMethod,
+            merchantOrderId: orderId,
+            productDetails: productLabel || productCode || code,
+            email,
+            customerVaName: (email || 'Customer').split('@')[0].slice(0,50),
+            callbackUrl,
+            returnUrl,
+            itemDetails: [
+              { name: productLabel || productCode || code, price: paymentAmount, quantity: 1 }
+            ],
+            customerDetail: {
+              email,
+              firstName: (email || 'User').split('@')[0]
+            }
+          })
+        });
+        const j = await resp.json();
+        if (j?.statusCode === '00' || j?.paymentUrl) {
+          paymentUrl = j.paymentUrl;
+        }
+      } catch {}
+
+      await db.collection('orders').insertOne({
+        orderId,
+        provider,
+        paymentGateway: gateway,
+        method,
+        code,
+        productCode: productCode || code,
+        productLabel: productLabel || code,
+        variantLabel: variantLabel || null,
+        variantPrice: typeof variantPrice === 'number' ? variantPrice : price,
+        userId,
+        email,
+        nominal,
+        sellPrice: totalSellPrice,
+        buyPrice,
+        fees: { admin: adminFee, gateway: gatewayFee, other: otherFee, total: Number(adminFee + gatewayFee + otherFee) },
+        details: { duitku: { paymentUrl, paymentMethod } },
+        status: 'pending',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      return Response.json({ success: true, message: 'Order dibuat. Lanjutkan pembayaran.', orderId, paymentUrl });
+    } catch (e:any) {
+      return Response.json({ success: false, message: 'Gagal membuat order Duitku', error: e?.message || 'duitku' }, { status: 500 });
+    }
+  }
+
   // Branch C: Midtrans
   if (gateway !== "midtrans") {
     return Response.json({ success: false, message: `Gateway ${gateway} belum didukung` }, { status: 400 });

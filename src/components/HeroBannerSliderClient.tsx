@@ -61,15 +61,28 @@ export default function HeroBannerSliderClient({ slides, intervalMs = 5000 }: { 
     [AutoplayPlugin]
   );
 
+  // Safety fallback: if after 1.2s slider not marked ready (maybe plugin failed on prod) force show static slides
+  useEffect(() => {
+    if (ready) return;
+    const t = setTimeout(() => {
+      if (!ready) setReady(true);
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [ready]);
+
   const scrollTo = useCallback((idx: number) => instanceRef.current?.moveToIdx(idx), [instanceRef]);
 
   if (!slides || slides.length === 0) return null;
+
+  // Fallback simple scroll if Keen somehow not attached yet but ready forced
+  const keenActive = !!instanceRef.current;
 
   return (
     <section className="mx-auto max-w-6xl px-4 mt-4">
       <div className="relative">
         {/* Aspect ratio wrapper reserves height early to prevent layout shift */}
         <div className="relative w-full aspect-[16/6] md:aspect-[16/5]">
+          {/** Primary Keen slider container */}
           <div
             ref={sliderRef}
             className={`keen-slider h-full transition-opacity duration-300 ${ready ? 'opacity-100' : 'opacity-0'} ${!ready ? 'pointer-events-none' : ''}`}
@@ -90,12 +103,29 @@ export default function HeroBannerSliderClient({ slides, intervalMs = 5000 }: { 
               </div>
             ))}
           </div>
+          {!keenActive && ready && (
+            <div className="absolute inset-0 rounded-2xl overflow-hidden">
+              <div className="w-full h-full flex gap-4 overflow-x-auto no-scrollbar p-1">
+                {slides.map((s, idx) => (
+                  <div key={`fallback-${idx}`} className="flex-none w-full rounded-2xl shadow overflow-hidden bg-[#fefefe]">
+                    {s.link ? (
+                      <a href={s.link} className="block w-full h-full">
+                        <SmartImage src={s.image} alt="Banner" className="w-full h-full object-cover object-center" loading="eager" />
+                      </a>
+                    ) : (
+                      <SmartImage src={s.image} alt="Banner" className="w-full h-full object-cover object-center" loading="eager" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {!ready && (
             <div className="absolute inset-0 rounded-2xl overflow-hidden">
               <div className="w-full h-full bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 animate-pulse" />
             </div>
           )}
-          {ready && slides.length > 1 && (
+          {ready && slides.length > 1 && keenActive && (
             <div className="absolute inset-x-0 bottom-2 flex items-center justify-center gap-2 z-10 pointer-events-none">
               {slides.map((_, idx) => (
                 <button

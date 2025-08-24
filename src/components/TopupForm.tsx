@@ -26,8 +26,10 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   const [message, setMessage] = useState("");
   const [snapToken, setSnapToken] = useState("");
   const [snapUrl, setSnapUrl] = useState("");
+  const [duitkuPaymentUrl, setDuitkuPaymentUrl] = useState("");
   const [midtransClientKey, setMidtransClientKey] = useState<string>("");
   const [gateways, setGateways] = useState<Array<{ name: string; enabled: boolean; methods: string[] }>>([]);
+  const [gatewaysLoaded, setGatewaysLoaded] = useState(false);
   const [selectedGateway, setSelectedGateway] = useState<string>("midtrans");
   const [selectedMethod, setSelectedMethod] = useState<string>("");
   const [showMethodModal, setShowMethodModal] = useState(false);
@@ -129,7 +131,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
   }, []);
   // Load available gateways for user selection
   useEffect(() => {
-    (async () => {
+  (async () => {
       try {
         const res = await fetch('/api/gateways/available', { cache: 'no-store' });
         const j = await res.json();
@@ -154,6 +156,9 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
           if (jf?.success && jf?.fees && typeof jf.fees === 'object') setMethodFees(jf.fees);
         } catch {}
       } catch {}
+      finally {
+        setGatewaysLoaded(true);
+      }
     })();
   }, []);
 
@@ -346,6 +351,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
     setLoading(true);
     setMessage("");
     setSnapToken("");
+  setDuitkuPaymentUrl("");
 
   const form = e.target as HTMLFormElement & { userId?: { value: string }; serverId?: { value: string }; nominal: { value: string } };
 
@@ -455,11 +461,16 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
     if (result.snapToken) setSnapToken(result.snapToken);
     if (result.snapRedirectUrl) setSnapUrl(result.snapRedirectUrl);
     if (result.midtransClientKey) setMidtransClientKey(result.midtransClientKey);
+  if (result.paymentUrl) setDuitkuPaymentUrl(result.paymentUrl);
 
     // Always route user to our instruction page to complete payment
     if (result?.orderId) {
-  const chosen = lastChosenKindRef.current;
-  const q = chosen ? `?m=${encodeURIComponent(chosen)}` : '';
+      // For Duitku, attempt to open payment URL in new tab first (graceful fallback handled by instructions page)
+      if (selectedGateway === 'duitku' && result.paymentUrl) {
+        try { window.open(result.paymentUrl, '_blank'); } catch {}
+      }
+      const chosen = lastChosenKindRef.current;
+      const q = chosen ? `?m=${encodeURIComponent(chosen)}` : '';
       window.location.href = `/payment-instructions/${encodeURIComponent(result.orderId)}${q}`;
       return;
     }
@@ -493,6 +504,12 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
 
   return (
   <form ref={formRef} className="bg-[#fefefe] rounded-xl border border-slate-200 shadow p-5 flex flex-col gap-4" onSubmit={handleSubmit}>
+      {duitkuPaymentUrl && (
+        <div className="text-[12px] px-3 py-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 -mb-1">
+          Link pembayaran Duitku siap. Jika tidak otomatis terbuka, klik {" "}
+          <a href={duitkuPaymentUrl} target="_blank" rel="noopener noreferrer" className="underline font-semibold">Buka Pembayaran</a>.
+        </div>
+      )}
       {/* Game ID input */}
   {code === "mlbb" ? (
         <div className="grid grid-cols-2 gap-3">
@@ -683,6 +700,31 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
           <div className="mb-2 text-sm font-medium text-slate-700">Metode Pembayaran{useGimcash && ' • GimCash'}</div>
           {payNotice && <div className="mb-2 text-xs text-red-600">{payNotice}</div>}
           {(() => {
+            // Placeholder while loading gateways: show GimCash style card (fee always 0) per request
+            if (!gatewaysLoaded) {
+              const base = selectedPrice ?? 0;
+              const total = base; // no fee
+              return (
+                <button type="button" onClick={() => setShowMethodModal(true)} className="w-full rounded-lg border px-3 py-3 text-left transition shadow-sm bg-white border-slate-300 hover:border-slate-400">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <img src="/images/logo/logo128.png" alt="GimCash" className="w-9 h-9 object-contain" />
+                      <div>
+                        <div className="text-[15px] font-semibold text-slate-900 leading-tight mb-0 truncate">GimCash</div>
+                        <div className="text-xs text-slate-600 mt-0">
+                          {selectedPrice != null ? (
+                            <span>Total: <span className="text-blue-600 font-bold text-[13px]">Rp {Number(total).toLocaleString()}</span></span>
+                          ) : (
+                            <span>Pilih item lebih dulu</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-xs font-medium text-blue-700">Ubah ▾</span>
+                  </div>
+                </button>
+              );
+            }
             const apList = activePaymentsUI.filter((ap) => ap && ap.enabled !== false);
             const current = apList.find((ap) => ap.gateway === selectedGateway && ap.method === selectedMethod) || apList[0] || null;
             const kind = current ? methodToKind(current.method) : methodToKind(selectedMethod || '');
@@ -888,7 +930,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                   return (
                     <div className="mb-3">
                       <div className="text-[12px] text-slate-500 mb-1">E-Wallet & QRIS</div>
-                      <div className="flex flex-col divide-y rounded-lg border border-slate-200 overflow-hidden">
+                      <div className="flex flex-col divide-y divide-slate-200/50 rounded-lg border border-slate-200/60 overflow-hidden backdrop-blur-[1px]">
                         {list.map((ap) => {
                           const kind = methodToKind(ap.method);
                           const fallbackIcon = kind === 'qris' ? '/images/iconpayment/qris.png'
@@ -933,7 +975,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                   return (
                     <div className="mb-1">
                       <div className="text-[12px] text-slate-500 mb-1">Virtual Account & Transfer</div>
-                      <div className="flex flex-col divide-y rounded-lg border border-slate-200 overflow-hidden">
+                      <div className="flex flex-col divide-y divide-slate-200/50 rounded-lg border border-slate-200/60 overflow-hidden backdrop-blur-[1px]">
                         {list.map((ap) => {
                           const kind = methodToKind(ap.method);
                           const fallbackIcon = kind === 'transfer' ? '/images/iconpayment/bank.png' : '/images/iconpayment/va.png';
@@ -964,7 +1006,7 @@ export default function TopupForm({ code, price, variants, hidePaymentMethods }:
                 })()}
 
                 {activePaymentsUI.length === 0 && (
-                  <div className="text-xs text-slate-500 border rounded p-3">Belum ada metode aktif. Atur di Dashboard &gt; Payment Gateway &gt; Active Payment.</div>
+                  <div className="text-xs text-slate-500 border rounded p-3">Belum ada metode aktif.</div>
                 )}
               </div>
             </div>
