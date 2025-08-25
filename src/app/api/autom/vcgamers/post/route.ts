@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { ensureAdminRequest } from "../../../../../../lib/adminAuth";
-import { sellerUpsertProduct } from "../../../../../../lib/providers/vcgamers";
-import { getDb } from "../../../../../../lib/mongodb";
+import { ensureAdminRequest } from "@/lib/adminAuth";
+import { sellerUpsertProduct } from "@/lib/providers/vcgamers";
+import { getDb } from "@/lib/mongodb";
 
 export async function POST(req: NextRequest) {
   if (!ensureAdminRequest(req)) return Response.json({ success: false, message: 'Unauthorized' }, { status: 401 });
