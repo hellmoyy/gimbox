@@ -2,6 +2,9 @@
 import crypto from "crypto";
 import { getDb } from '../mongodb';
 import { VCGAMERS_API_KEY as CFG_KEY, VCGAMERS_SECRET_KEY as CFG_SECRET, VCGAMERS_SANDBOX as CFG_SANDBOX } from "../runtimeConfig";
+// Seller keys (marketplace automation)
+const SELLER_KEY = (process.env.VCG_SELLER_API_KEY || '').trim();
+const SELLER_SECRET = (process.env.VCG_SELLER_API_SECRET_KEY || '').trim();
 
 export type VCGOrderRequest = {
   productCode: string;
@@ -70,6 +73,81 @@ export function signPayload(payload: any) {
   const body = typeof payload === "string" ? payload : JSON.stringify(payload);
   // Assumption: HMAC-SHA256 over body using secret
   return crypto.createHmac("sha256", secret).update(body).digest("hex");
+}
+
+// Seller side signing (separate secret) – fallback to main secret if seller secret absent
+function signSeller(body: any) {
+  const secret = SELLER_SECRET || getSecret();
+  const payload = typeof body === 'string' ? body : JSON.stringify(body);
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+}
+
+export type VCGSellerUpsertRequest = {
+  productCode: string;            // internal or existing marketplace code
+  name: string;                   // display name
+  brandKey?: string;              // optional brand association
+  variationKey?: string;          // optional variation mapping
+  cost: number;                   // buy cost from VCGamers (or base cost)
+  price?: number;                 // selling price (if omitted backend may compute)
+  category?: string;              // category label
+  imageUrl?: string;              // icon/image
+  isActive?: boolean;             // active toggle
+  raw?: any;                      // original source object (for auditing)
+};
+
+export type VCGSellerUpsertResponse = { success: boolean; message?: string; data?: any; remoteId?: string };
+
+// Attempt to POST/PUT product into seller marketplace (paths guessed; adjust if docs differ)
+export async function sellerUpsertProduct(req: VCGSellerUpsertRequest): Promise<VCGSellerUpsertResponse> {
+  if (!SELLER_KEY || !SELLER_SECRET) {
+    return { success: false, message: 'Seller API key/secret belum dikonfigurasi' };
+  }
+  const base = baseUrl();
+  const body: any = {
+    code: req.productCode,
+    name: req.name,
+    brand_key: req.brandKey,
+    variation_key: req.variationKey,
+    cost: req.cost,
+    price: req.price ?? req.cost,
+    category: req.category,
+    image: req.imageUrl,
+    is_active: req.isActive !== false,
+  };
+  // Clean undefined
+  Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
+  const signature = signSeller(body);
+  const headers: Record<string,string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${SELLER_KEY}`,
+    'X-Signature': signature,
+  };
+  // Try update first (PUT), then create (POST)
+  const endpoints = [
+    { method: 'PUT', url: `${base}/v1/seller/products/${encodeURIComponent(req.productCode)}` },
+    { method: 'POST', url: `${base}/v1/seller/products` },
+  ];
+  const attempts: Array<{method:string;url:string;status?:number;ok:boolean;msg?:string}> = [];
+  for (const ep of endpoints) {
+    try {
+      const res = await fetch(ep.url, { method: ep.method, headers, body: JSON.stringify(body), cache: 'no-store' });
+      const text = await res.text();
+      let json: any = {}; try { json = JSON.parse(text||'{}'); } catch {}
+      if (res.ok && (json?.success !== false)) {
+        return { success: true, data: json, remoteId: json?.data?.id || json?.data?.code || req.productCode };
+      }
+      attempts.push({ method: ep.method, url: ep.url, status: res.status, ok: false, msg: (json?.message||'') });
+    } catch (e:any) {
+      attempts.push({ method: ep.method, url: ep.url, ok:false, msg: e.message });
+    }
+  }
+  if (process.env.DEBUG_VCGAMERS === '1') {
+    try {
+      const db = await getDb();
+      await db.collection('vcg_attempts').insertOne({ kind: 'sellerUpsert', productCode: req.productCode, attempts: attempts.slice(0,5), createdAt: new Date() });
+    } catch {}
+  }
+  return { success: false, message: attempts.map(a=>`${a.method} ${a.status||''} ${(a.msg||'').slice(0,60)}`).join(' | ') };
 }
 
 export async function getPriceList(): Promise<Array<{ code: string; name: string; cost: number; icon?: string; category?: string }>> {

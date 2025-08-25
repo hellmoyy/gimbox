@@ -85,12 +85,18 @@ const icons = {
       <path d="M6.8 6.8a7 7 0 1 0 9.9 0" strokeLinecap="round" />
     </svg>
   ),
+  bolt: (
+    <svg className={iconCls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" strokeLinejoin="round" />
+    </svg>
+  ),
 };
 
 type NavItem = { href: string; label: string; icon: React.ReactNode; children?: Array<{ href: string; label: string; icon?: React.ReactNode }> };
 
 const nav: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: icons.home },
+  { href: "/admin/autom", label: "Gimbox Autom", icon: icons.bolt },
   { href: "/admin/brands", label: "Brands", icon: icons.grid },
   { href: "/admin/products", label: "Produk", icon: icons.box },
   { href: "/admin/banners", label: "Banner", icon: icons.image },
