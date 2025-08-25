@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Brand = { code: string; name: string };
+type AutomResult = { success: boolean; message?: string; [k:string]: any };
 
 export default function GimboxAutomPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -16,7 +17,7 @@ export default function GimboxAutomPage() {
   const [active, setActive] = useState(true);
   const [rawJson, setRawJson] = useState("{}");
   const [posting, setPosting] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<AutomResult | null>(null);
   const [error, setError] = useState<string>("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [bulkBrand, setBulkBrand] = useState("");
@@ -117,8 +118,8 @@ export default function GimboxAutomPage() {
               setAllProgress(p=>({...p, failed: p.failed + 1 }));
             }
         }
-      }
-      setResult(r=> r || { success: true, bulkAll: true });
+  }
+  setResult((r: AutomResult | null): AutomResult => r || { success: true, bulkAll: true });
     } catch (e:any) {
       setError(e.message);
     } finally {
